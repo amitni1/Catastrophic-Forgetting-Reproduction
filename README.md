@@ -10,7 +10,7 @@ The project evaluates a Continual Learning scenario over multiple sequential tas
 
 ## Table of Contents
 - [Background](#background)
-- [Conclusions](conclusions.md)
+- [Academic documentation](#Academicdocumentation)
 - [Project Overview](#project-overview)
 - [Architecture & Parameters](#architecture--parameters)
 - [Results & Evaluation](#results--evaluation)
@@ -18,7 +18,9 @@ The project evaluates a Continual Learning scenario over multiple sequential tas
 - [Dependencies](#dependencies)
 
 ---
-
+## Academic documentation
+Based on the need document every step we took to achieve our results.
+- [Conclusions](conclusions.md)
 ## Background
 
 ### Catastrophic Forgetting
