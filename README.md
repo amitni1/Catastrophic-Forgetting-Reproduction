@@ -9,8 +9,8 @@
 The project evaluates a Continual Learning scenario over multiple sequential tasks using the **Permuted MNIST** dataset.
 
 ## Table of Contents
-- [Background](#background)
 - [Academic documentation](#Academicdocumentation)
+- [Background](#background)
 - [Project Overview](#project-overview)
 - [Architecture & Parameters](#architecture--parameters)
 - [Results & Evaluation](#results--evaluation)
@@ -20,7 +20,10 @@ The project evaluates a Continual Learning scenario over multiple sequential tas
 ---
 ## Academic documentation
 Based on the need document every step we took to achieve our results.
-- [Conclusions](conclusions.md)
+- [Conclusions](conclusions.md) - Main takeaways from the project and personal assumption.
+- [Ai medotology](ai_medotology.md) - Documentation on the use of ai to code and assmble to the project.  
+- [EWC Model](EWC_Model.md) - a short explain on how EWC is used and behaved in the project.
+- [Ai-Drafting](Ai_Draft.md) -How we used Ai promtoring in its raw form to steer it in the direction we wanted.
 ## Background
 
 ### Catastrophic Forgetting
