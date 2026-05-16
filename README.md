@@ -61,17 +61,29 @@ To force rapid weight overwriting and simulate a restricted memory footprint, a 
 
 ---
 
-## Results & Evaluation
+## Results & Graphs
 
-During training, the test accuracy on **all tasks** is tracked at the end of every epoch. 
+The empirical results of this experiment are visualized across three structural performance benchmarks, mirroring the validation metrics of the original research.
 
-### Final Metrics Log
-```text
---- Training on Task A ---
-Epoch 10 | EWC [A:98.1%, B:11.0%, C:11.3%] | SGD [A:97.9%, B:11.9%, C:8.2%]
+### 1. Continual Learning Task Performance (Accuracy Timeline)
+This plot tracks the real-time test accuracy on all three tasks simultaneously across the 30-epoch sequential training horizon.
 
---- Training on Task B ---
-Epoch 10 | EWC [A:97.5%, B:96.2%, C:12.5%] | SGD [A:78.2%, B:97.8%, C:8.4%]
+![Continual Learning Accuracy Timeline](continual_learning_accuracy.png)
 
---- Training on Task C ---
-Epoch 10 | EWC [A:96.9%, B:95.0%, C:94.8%] | SGD [A:47.7%, B:75.5%, C:97.6%]
+* **Standard SGD (Dashed Lines)**: Suffers severely from Catastrophic Forgetting. Upon transitioning to Task B and Task C, accuracy on the original Task A falls sharply from **~98% down to 47.7%**.
+* **Online EWC (Solid Lines)**: Effectively protects consolidated pathways. Even after completing Task C training, performance on Task A drops minimally, remaining robust at **96.9%**.
+
+### 2. Average Task Retention (Paper Figure 2B Replication)
+This plot computes the *Average Fraction Correct (%)* across all learned tasks as the sequence scales up to evaluate structural memory preservation.
+
+![Average Performance Over Tasks](average_accuracy_fig2b.png)
+
+* While standard SGD's average system competence decays linearly as new domains are forced into its parameters, the **Online EWC** regularization penalty locks critical task-specific sub-spaces, maintaining high average accuracy across the lifelong learning timeline.
+
+### 3. Fisher Overlap vs Network Depth (Paper Figure 2C Replication)
+This plot evaluates the diagonal elements of the computed Fisher Information Matrices to measure parameter importance overlap between different tasks across the hidden structural depth of the model.
+
+![Fisher Overlap vs Network Depth](fisher_overlap_vs_depth_fig2c.png)
+
+* **Low % Permutation**: Tasks with highly correlated pixel contexts show sustained, high Fisher importance overlap throughout the deep layers of the network.
+* **High % Permutation**: Highly disparate contexts force the structural layers to drift apart. Overlap falls heavily as layer depth increases, forcing the model to calculate entirely distinct pathways for non-overlapping data representations.
