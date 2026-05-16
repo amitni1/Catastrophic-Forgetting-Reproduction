@@ -2,9 +2,9 @@
 # Catastrophic Forgetting & Online EWC Reproduction Project
 > ** Orignal paper**
 >*James Kirkpatrick, Razvan Pascanu, Neil Rabinowitz, Joel Veness, Guillaume Desjardins, Andrei A. Rusu, Kieran Milan, John Quan, Tiago Ramalho, Agnieszka Grabska-Barwinska, Demis Hassabis, Claudia Clopath, Dharshan Kumaran, Raia Hadsell (2017)*
+
 > *Overcoming catastrophic forgetting in neural networks*
 > arXiv:1312.6211v3
-This repository contains a PyTorch implementation and reproduction project exploring the phenomenon of **Catastrophic Forgetting** in Neural Networks, and its mitigation using the **Online Elastic Weight Consolidation (Online EWC)** algorithm. 
 
 The project evaluates a Continual Learning scenario over multiple sequential tasks using the **Permuted MNIST** dataset.
 
