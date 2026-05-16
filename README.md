@@ -68,7 +68,7 @@ The empirical results of this experiment are visualized across three structural 
 ### 1. Continual Learning Task Performance (Accuracy Timeline)
 This plot tracks the real-time test accuracy on all three tasks simultaneously across the 30-epoch sequential training horizon.
 
-![Continual Learning Accuracy Timeline](3task-continual_learning_accuracy.png)
+![Continual Learning Accuracy Timeline](continual_learning_accuracy.png)
 
 * **Standard SGD (Dashed Lines)**: Suffers severely from Catastrophic Forgetting. Upon transitioning to Task B and Task C, accuracy on the original Task A falls sharply from **~98% down to 47.7%**.
 * **Online EWC (Solid Lines)**: Effectively protects consolidated pathways. Even after completing Task C training, performance on Task A drops minimally, remaining robust at **96.9%**.
@@ -76,14 +76,14 @@ This plot tracks the real-time test accuracy on all three tasks simultaneously a
 ### 2. Average Task Retention (Paper Figure 2B Replication)
 This plot computes the *Average Fraction Correct (%)* across all learned tasks as the sequence scales up to evaluate structural memory preservation.
 
-![Average Performance Over Tasks](3tasksaverage_accuracy_fig2b.png)
+![Average Performance Over Tasks](average_accuracy_fig2b.png)
 
 * While standard SGD's average system competence decays linearly as new domains are forced into its parameters, the **Online EWC** regularization penalty locks critical task-specific sub-spaces, maintaining high average accuracy across the lifelong learning timeline.
 
 ### 3. Fisher Overlap vs Network Depth (Paper Figure 2C Replication)
 This plot evaluates the diagonal elements of the computed Fisher Information Matrices to measure parameter importance overlap between different tasks across the hidden structural depth of the model.
 
-![Fisher Overlap vs Network Depth](3tasksfisher_overlap_vs_depth_fig2c.png)
+![Fisher Overlap vs Network Depth](fisher_overlap_vs_depth_fig2c.png)
 
 * **Low % Permutation**: Tasks with highly correlated pixel contexts show sustained, high Fisher importance overlap throughout the deep layers of the network.
 * **High % Permutation**: Highly disparate contexts force the structural layers to drift apart. Overlap falls heavily as layer depth increases, forcing the model to calculate entirely distinct pathways for non-overlapping data representations.
