@@ -10,7 +10,7 @@ The project evaluates a Continual Learning scenario over multiple sequential tas
 
 ## Table of Contents
 - [Background](#background)
-- conclusions **(conclusions)**
+- [conclusions](conclusions.md)
 - [Project Overview](#project-overview)
 - [Architecture & Parameters](#architecture--parameters)
 - [Results & Evaluation](#results--evaluation)
