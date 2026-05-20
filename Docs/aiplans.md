@@ -6,17 +6,6 @@ A reproduction of the paper:
 
 ---
 
-## Table of Contents
-
-- [Background](#background)
-- [Project Structure](#project-structure)
-- [Q&A — Development Process](#qa--development-process)
-- [Results](#results)
-- [Running the Code](#running-the-code)
-- [References](#references)
-
----
-
 ## Background
 
 **Catastrophic Forgetting** is a phenomenon where a neural network, after learning a new task, completely forgets previously learned tasks. This happens because weight updates for the new task overwrite the information encoded for older ones.
