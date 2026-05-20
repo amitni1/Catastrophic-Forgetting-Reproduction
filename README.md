@@ -73,7 +73,7 @@ The empirical results of this experiment are visualized across three structural 
 ### 1. Continual Learning Task Performance (Accuracy Timeline)
 This plot tracks the real-time test accuracy on all three tasks simultaneously across the 30-epoch sequential training horizon.
 
-![Continual Learning Accuracy Timeline](images/continual_learning_accuracy_v1.png)
+![Continual Learning Accuracy Timeline](images/continual_learning_accuracy _v1.png)
 
 * **Standard SGD (Dashed Lines)**: Suffers severely from Catastrophic Forgetting. Upon transitioning to Task B and Task C, accuracy on the original Task A falls sharply from **~98% down to 47.7%**.
 * **Online EWC (Solid Lines)**: Effectively protects consolidated pathways. Even after completing Task C training, performance on Task A drops minimally, remaining robust at **96.9%**.
