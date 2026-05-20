@@ -1,11 +1,5 @@
 # Overcoming Catastrophic Forgetting — EWC Implementation
 
-A reproduction of the paper:
-> **Kirkpatrick et al. (2017)** — *Overcoming catastrophic forgetting in neural networks*
-> [arXiv:1612.00796](https://arxiv.org/abs/1612.00796)
-
----
-
 ## Background
 
 **Catastrophic Forgetting** is a phenomenon where a neural network, after learning a new task, completely forgets previously learned tasks. This happens because weight updates for the new task overwrite the information encoded for older ones.
