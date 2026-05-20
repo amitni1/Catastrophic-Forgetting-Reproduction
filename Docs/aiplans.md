@@ -20,22 +20,6 @@ $$\mathcal{L}(\theta) = \mathcal{L}_B(\theta) + \sum_i \frac{\lambda}{2} F_i (\t
 
 ---
 
-The notebook is organized into the following cells:
-
-| Cell | Contents |
-|------|----------|
-| 0 | Imports, device setup (GPU/CPU) |
-| 1 | MNIST loading, `PermutedMNIST` class, creation of 10 tasks |
-| 2 | Network definition `Net` — 6 FC layers + ReLU |
-| 3 | Core functions: `compute_fisher`, `ewc_penalty`, `test_model` |
-| 4 | Model initialization, optimizers, hyperparameters |
-| 5 | Main training loop — SGD vs. EWC across 10 tasks |
-| 6 | Figure A — Tracking accuracy of the first 3 tasks over training |
-| 7 | Figure B — Average accuracy as a function of number of tasks |
-| 8 | Figure C — Fisher matrix overlap by layer depth |
-
----
-
 ## Q&A — Development Process
 
 ### Q1: How should the code be organized?
@@ -156,35 +140,6 @@ Two permutation sizes are used: `8×8` (high task similarity) and `26×26` (low 
 | Number of tasks | up to 10 | 10 |
 
 The deeper architecture was chosen to better illustrate the Fisher overlap by layer depth in Figure C.
-
----
-
-## Results
-
-This project reproduces the three main figures from the paper:
-
-**Figure A** — Training curves: SGD catastrophically forgets previous tasks as new ones are learned; EWC maintains high accuracy throughout.
-
-**Figure B** — EWC sustains high average accuracy as the number of tasks grows, while SGD degrades sharply.
-
-**Figure C** — Similar tasks (8×8 permutation) share weights throughout the entire network; dissimilar tasks (26×26 permutation) use separate weights in early layers but share representations in the final layers (since the output space — digit classes — is the same for all tasks).
-
----
-
-## Running the Code
-
-```bash
-# Recommended: open in Google Colab (free GPU)
-# Or run locally:
-pip install torch torchvision matplotlib numpy
-jupyter notebook notebook.ipynb
-```
-
-**Requirements:**
-- Python 3.8+
-- PyTorch 1.12+
-- torchvision
-- matplotlib, numpy
 
 ---
 
