@@ -75,8 +75,8 @@ This plot tracks the real-time test accuracy on all three tasks simultaneously a
 
 ![Continual Learning Accuracy Timeline](images/continual_learning_accuracy_V1.png)
 
-* **Standard SGD (Dashed Lines)**: Suffers severely from Catastrophic Forgetting. Upon transitioning to Task B and Task C, accuracy on the original Task A falls sharply from **~98% down to 47.7%**.
-* **Online EWC (Solid Lines)**: Effectively protects consolidated pathways. Even after completing Task C training, performance on Task A drops minimally, remaining robust at **96.9%**.
+* **Standard SGD (Dashed Lines)**: Suffers severely from Catastrophic Forgetting. Upon transitioning to Task B and Task C, accuracy on the original Task A falls sharply from **~98% down to 19.7%**.
+* **Online EWC (Solid Lines)**: Effectively protects consolidated pathways. Even after completing Task C training, performance on Task A drops minimally, remaining robust at **77.9%**.
 
 ### 2. Average Task Retention (Paper Figure 2B Replication)
 This plot computes the *Average Fraction Correct (%)* across all learned tasks as the sequence scales up to evaluate structural memory preservation.
