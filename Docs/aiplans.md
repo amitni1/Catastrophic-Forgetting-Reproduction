@@ -31,15 +31,6 @@ $$\mathcal{L}(\theta) = \mathcal{L}_B(\theta) + \sum_i \frac{\lambda}{2} F_i (\t
 
 ---
 
-## Project Structure
-
-```
-📁 EWC-Catastrophic-Forgetting/
-│
-├── notebook.ipynb          # Main notebook with all code and results
-└── README.md               # This file
-```
-
 The notebook is organized into the following cells:
 
 | Cell | Contents |
