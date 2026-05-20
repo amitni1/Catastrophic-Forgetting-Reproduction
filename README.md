@@ -22,7 +22,7 @@ The project evaluates a Continual Learning scenario over multiple sequential tas
 Based on the need to document every step we took to achieve our results.
 - [Conclusions](ai_medotology.md) - Main takeaways from the project and personal assumption.
 - [Ai medotology](ai_medotology.md) - Documentation on the use of ai to code and assmble to the project.  
-- [EWC Model](Docs/EWC_model.md) - a short explain on how EWC is used and behaved in the project.
+- [EWC Model](Docs/EWC_Model.md) - a short explain on how EWC is used and behaved in the project.
 - [Ai-Drafting](Ai_Draft.md) -How we used Ai promtoring in its raw form to steer it in the direction we wanted.
 ## Background
 
