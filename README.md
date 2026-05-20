@@ -77,14 +77,14 @@ This plot tracks the real-time test accuracy on all three tasks simultaneously a
 * **Standard SGD (Dashed Lines)**: Suffers severely from Catastrophic Forgetting. Upon transitioning to Task B and Task C, accuracy on the original Task A falls sharply from **~98% down to 19.7%**.
 * **Online EWC (Solid Lines)**: Effectively protects consolidated pathways. Even after completing Task C training, performance on Task A drops minimally, remaining robust at **77.9%**.
 
-### 2. Average Task Retention (Paper Figure 2B Replication)
+### 2. Average Task Retention 
 This plot computes the *Average Fraction Correct (%)* across all learned tasks as the sequence scales up to evaluate structural memory preservation.
 
 ![Average Performance Over Tasks](images/average_accuracy_fig2b_v1.png)
 
 * While standard SGD's average system competence decays linearly as new domains are forced into its parameters, the **Online EWC** regularization penalty locks critical task-specific sub-spaces, maintaining high average accuracy across the lifelong learning timeline.
 
-### 3. Fisher Overlap vs Network Depth (Paper Figure 2C Replication)
+### 3. Fisher Overlap vs Network Depth
 This plot evaluates the diagonal elements of the computed Fisher Information Matrices to measure parameter importance overlap between different tasks across the hidden structural depth of the model.
 
 ![Fisher Overlap vs Network Depth](images/fisher_overlap_vs_depth_fig2c_v2.png)
