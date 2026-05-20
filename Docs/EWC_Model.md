@@ -1,6 +1,6 @@
-# Elastic Weight Consolidation (EWC) — Notebook Walkthrough
+# EWC model in Catastophic Forgetting
 
-> This document explains each section of the notebook step by step, covering both *what* the code does and *why* it matters in the context of Elastic Weight Consolidation (EWC) for continual learning.
+this document details how EWC was used in our project and how each section of code works
 
 ---
 
