@@ -81,7 +81,7 @@ This plot tracks the real-time test accuracy on all three tasks simultaneously a
 ### 2. Average Task Retention (Paper Figure 2B Replication)
 This plot computes the *Average Fraction Correct (%)* across all learned tasks as the sequence scales up to evaluate structural memory preservation.
 
-![Average Performance Over Tasks](images/continual_learning_accuracy_v1.png)
+![Average Performance Over Tasks](images/continual_learning_accuracy_V1.png)
 
 * While standard SGD's average system competence decays linearly as new domains are forced into its parameters, the **Online EWC** regularization penalty locks critical task-specific sub-spaces, maintaining high average accuracy across the lifelong learning timeline.
 
