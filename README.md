@@ -19,7 +19,7 @@ The project evaluates a Continual Learning scenario over multiple sequential tas
 
 ---
 ## Academic documentation
-Based on the need document every step we took to achieve our results.
+Based on the need to document every step we took to achieve our results.
 - [Conclusions](conclusions.md) - Main takeaways from the project and personal assumption.
 - [Ai medotology](ai_medotology.md) - Documentation on the use of ai to code and assmble to the project.  
 - [EWC Model](EWC_Model.md) - a short explain on how EWC is used and behaved in the project.
@@ -53,8 +53,8 @@ We compare two models simultaneously:
 ### Neural Network Structure
 To force rapid weight overwriting and simulate a restricted memory footprint, a compact Multi-Layer Perceptron (MLP) was constructed:
 - **Input Layer**: $28 \times 28 = 784$ neurons (Flattened MNIST image).
-- **Hidden Layer 1**: 100 neurons (ReLU activation).
-- **Hidden Layer 2**: 100 neurons (ReLU activation).
+- **Hidden Layer 1**: 400 neurons (ReLU activation).
+- **Hidden Layer 2**: 400 neurons (ReLU activation).
 - **Output Layer**: 10 neurons (Log Softmax / Cross Entropy for digits 0-9).
 
 ### Hyperparameters
@@ -63,7 +63,6 @@ To force rapid weight overwriting and simulate a restricted memory footprint, a 
 - **Momentum**: 0.9 (SGD)
 - **EWC Lambda ($\lambda$)**: 1000 (Importance weight penalty)
 - **Fisher Memory Dampening Factor ($\alpha$)**: 0.5
-- **Number of neurons **: 400
 ---
 
 ## Results & Graphs
