@@ -1,4 +1,4 @@
-# EWC Model Validation & Verification
+# EWC Model Validation & Testing
 
 This document describes how we validate and check the **Elastic Weight Consolidation (EWC)** implementation in our continual learning experiments on Permuted MNIST.
 
