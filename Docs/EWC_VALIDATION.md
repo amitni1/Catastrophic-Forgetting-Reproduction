@@ -2,6 +2,7 @@
 
 This document describes how we validate and check the **Elastic Weight Consolidation (EWC)** implementation in our continual learning experiments on Permuted MNIST.
 
+> note : the testing were done at 3 epoch cycles and on multiple task to streamline testing, the testing still apply to 10 epoch cycles used in the main code
 ---
 
 ## Overview
