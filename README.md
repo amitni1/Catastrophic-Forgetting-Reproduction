@@ -7,7 +7,7 @@
 > arXiv:1312.6211v3
 
 The project evaluates a Continual Learning scenario over multiple sequential tasks using the **Permuted MNIST** dataset.
-
+this project is part of a submission for a course in python by students: Amit Nigerker and Yuval Holoidovsky
 ## Table of Contents
 - [Academic documentation](#Academicdocumentation)
 - [Background](#background)
