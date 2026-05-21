@@ -22,7 +22,7 @@ this project is part of a submission for a course in python by students: Amit Ni
 Based on the need to document every step we took to achieve our results.
 - [Conclusions](ai_medotology.md) - Main takeaways from the project and personal assumption.
 - [Ai medotology](Docs/EWC_Model.md) - Documentation on the use of ai to code and assmble to the project.  
-- [validation and testing ](Docs/EWC_VALIDATION.md) - a short explain on the vaildation and testing of EWC in the project.
+- [Validation and testing ](Docs/EWC_VALIDATION.md) - a short explain on the vaildation and testing of EWC in the project.
 - [Ai-Drafting](Docs/aiplans.md) -How we used Ai promtoring in its raw form to steer it in the direction we wanted.
 ## Background
 
