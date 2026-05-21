@@ -134,23 +134,7 @@ With EWC, the penalty term changes that. Weights that were critical for task A (
 
 ---
 
-### Q7: How does our network architecture compare to the paper's?
 
-**Us:** We made some changes to the network — can you help us document how it differs from the original?
-
-**AI:** Here's a clean comparison of the key differences:
-
-| Parameter | Paper | This Project |
-|-----------|-------|--------------|
-| Hidden layers | 2 | 6 |
-| Layer width | 400 | 400 |
-| Optimizer | SGD | SGD + momentum=0.9 |
-| Epochs per task | 20 | 3 |
-| Number of tasks | up to 10 | 10 |
-
-The main reason we went deeper (6 layers instead of 2) is to better illustrate the Fisher overlap pattern across layer depth in Figure C — with only 2 layers, there wouldn't be enough depth to see the gradient clearly.
-
----
 
 ## References
 
