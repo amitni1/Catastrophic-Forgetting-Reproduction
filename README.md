@@ -24,7 +24,7 @@ Based on the need to document every step we took to achieve our results.
 - [Ai medotology](Docs/AI_METHODOLOGY.md) - Documentation on the use of ai to code and assmble to the project.
 - [EWC Model in code ](Docs/EWC_Model.md) - a short explain on how to code of EWC in our project works cell by cell.
 - [Validation and testing ](Docs/EWC_VALIDATION.md) - a short explain on the vaildation and testing of EWC in the project.
-- [Ai-Drafting](Docs/aiplans.md) -How we used Ai promtoring in its raw form to steer it in the direction we wanted.
+- [Ai-Drafting](Docs/AI-Planning.md) -How we used Ai promtoring in its raw form to steer it in the direction we wanted.
 ## Background
 
 ### Catastrophic Forgetting
