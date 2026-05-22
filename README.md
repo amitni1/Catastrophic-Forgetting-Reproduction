@@ -13,10 +13,7 @@ this project is part of a submission for a course in python by students: Amit Ni
 - [Background](#background)
 - [Project Overview](#project-overview)
 - [Architecture & Parameters](#architecture--parameters)
-- [Results & Evaluation](#results--evaluation)
-- [Installation & Running](#installation--running)
-- [Dependencies](#dependencies)
-
+- [Results & Evaluation](#Results--and--Graphs)
 ---
 ## Academic documentation
 Based on the need to document every step we took to achieve our results.
@@ -67,7 +64,7 @@ To force rapid weight overwriting and simulate a restricted memory footprint, a 
 - **Fisher Memory Dampening Factor ($\alpha$)**: 0.5
 ---
 
-## Results & Graphs
+## Results and Graphs
 
 The empirical results of this experiment are visualized across three structural performance benchmarks, mirroring the validation metrics of the original research.
 
