@@ -24,7 +24,7 @@ The paper plots per-task test accuracy over training time for EWC and SGD. EWC c
  
 ### Our Replication
  
-![Our Fig 2A replication — Continual Learning: EWC vs SGD tracking Tasks A, B, C over 30 epochs](images/average_accuracy_fig2b_v1.png)
+![Our Fig 2A replication — Continual Learning: EWC vs SGD tracking Tasks A, B, C over 30 epochs](images/continual_learning_accuracy_V1.png)
  
 *Our Fig 2A replication — Continual Learning: EWC vs SGD tracking Tasks A, B, C over 30 epochs*
  
