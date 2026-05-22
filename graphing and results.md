@@ -71,6 +71,10 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 again we didnt expect all of the graphs to align perfectly since its was test run but it successful one
  
 ## Scenario 2
+# Graph Comparison: Our Results vs. the Paper
+ 
+here we upped the number of tasks to 10 and with 20 epoch with a lamda of 5000 and 400 neurons in order to recreate the papers results
+ 
 ### Summary Comparison Table
  
 | Figure | Paper's Graph | Our Graph | Match? | Key Differences |
@@ -89,7 +93,7 @@ The paper plots per-task test accuracy over training time for both EWC and SGD. 
  
 #### Our Replication
  
-![Our Fig 2A replication — Continual Learning: EWC vs SGD tracking Tasks A, B, C over 30 epochs](images/continual_learning_accuracy_V1.png)
+![Our Fig 2A replication — Continual Learning: EWC vs SGD tracking Tasks A, B, C over 100 epochs](images/average_accuracy_fig2b_v2.png)
  
 *Our Fig 2A replication — Continual Learning: EWC vs SGD tracking Tasks A, B, C over 100 epochs*
  
@@ -106,9 +110,8 @@ The paper plots per-task test accuracy over training time for both EWC and SGD. 
 The paper plots average test accuracy (averaged across all tasks seen so far) as a function of the number of tasks trained. EWC degrades slowly, staying above 80% through 10 tasks. SGD degrades steeply, reaching approximately 20% by task 10. Single-task performance (~97%) is shown as a reference.
  
 #### Our Replication
-
  
-![Our Fig 2B replication — Average Fraction Correct vs Number of Tasks](average_accuracy_fig2b_v3.png)
+![Our Fig 2B replication — Average Fraction Correct vs Number of Tasks](images/continual_learning_v2.png)
  
 *Our Fig 2B replication — Average Fraction Correct vs Number of Tasks*
  
@@ -126,7 +129,7 @@ The paper plots Fisher information overlap between tasks as a function of layer 
  
 #### Our Replication
  
-![Our Fig 2C replication — Fisher Overlap vs Depth for low and high permutation conditions](fisher_overlap_V3.png)
+![Our Fig 2C replication — Fisher Overlap vs Depth for low and high permutation conditions](images/fisher_overlap_V2.png)
  
 *Our Fig 2C replication — Fisher Overlap vs Depth for low and high permutation conditions*
  
