@@ -21,6 +21,7 @@ this project is part of a submission for a course in python by students: Amit Ni
 ## Academic documentation
 Based on the need to document every step we took to achieve our results.
 - [Conclusions](Docs/TAKEAWAYS.md) - Main takeaways from the project and personal assumption.
+- [Graphs and results](graphing_and_results.md) - the reproduction of the paper graphs and the results of the project.
 - [Ai medotology](Docs/AI_METHODOLOGY.md) - Documentation on the use of ai to code and assmble to the project.
 - [EWC Model in code ](Docs/EWC_Model.md) - a short explain on how to code of EWC in our project works cell by cell.
 - [Validation and testing ](Docs/EWC_VALIDATION.md) - a short explain on the vaildation and testing of EWC in the project.
