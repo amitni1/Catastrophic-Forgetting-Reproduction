@@ -67,6 +67,8 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 **What matched:** The ordering between conditions is preserved: low-% permutation consistently shows higher Fisher overlap (~0.85) than high-% permutation (~0.68–0.70) across all layers, correctly reflecting the relationship between task similarity and weight importance overlap.
  
 **Differences:** The paper's central finding — convergence of both conditions at deeper layers — is **not reproduced**. In our graph, both lines remain essentially flat and separated across all 6 layers, showing no convergence trend. This is a meaningful divergence. Possible causes include: our permutation sizes may not produce sufficient dissimilarity in early layers to drive the convergence pattern; our 6-layer architecture may spread representations differently than the paper's network; or our Fisher computation (empirical Fisher vs. exact Fisher) may produce smoother, less layer-specific values. This figure requires further investigation and is the weakest aspect of our replication.
+
+again we didnt expect all of the graphs to align perfectly since its was test run but it successful one
  
 ## Scenario 2
 ### Summary Comparison Table
