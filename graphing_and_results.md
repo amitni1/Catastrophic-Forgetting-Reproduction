@@ -2,7 +2,7 @@
  
 This section compares each figure we reproduced against the equivalent figure in Kirkpatrick et al. (2017), identifying what was successfully recreated and where quantitative or qualitative differences remain.
 ## Scenario 1
-in to Scenario we are running the code and EWC model on a smaller scale to see how it holds up and the results are promising.
+in this Scenario we are running the code and EWC model on a smaller scale to see how it holds up and the results are promising.
 number of tasks here are 10 but with 3 epoch each just to see if i can handle it and not break down.
 
 
