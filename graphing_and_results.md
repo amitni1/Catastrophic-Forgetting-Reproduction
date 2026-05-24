@@ -143,10 +143,6 @@ The paper plots Fisher information overlap between tasks as a function of layer 
  
 We successfully reproduced the **core qualitative findings** of Kirkpatrick et al. (2017): EWC substantially outperforms SGD in continual learning; Fisher overlap reflects task similarity; and shared output representations persist across dissimilar tasks. Quantitative differences in absolute accuracy levels (Fig 2B) are expected given architecture and hyperparameter differences, and do not undermine the validity of our replication. The most important result — **EWC remembers, SGD forgets** — is unmistakably clear across all three figures.
 
-# Graph Comparison: Our Results vs. the Paper
-
-This section compares each figure we reproduced against the equivalent figure in Kirkpatrick et al. (2017), identifying what was successfully recreated and where quantitative or qualitative differences remain.
-
 ---
 ## Scenario 3
 in to Scenario we are trying to fully recreate the papers figures using our model and code
