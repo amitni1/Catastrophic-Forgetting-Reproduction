@@ -57,11 +57,12 @@ To force rapid weight overwriting and simulate a restricted memory footprint, a 
 - **Output Layer**: 10 neurons (Log Softmax / Cross Entropy for digits 0-9).
 
 ### Hyperparameters
-- **Epochs per task**: 3
-- **Learning Rate ($Lr$)**: 0.005
+- **Epochs per task**: 20
+- **Learning Rate ($Lr$)**: 0.001
 - **Momentum**: 0.9 (SGD)
-- **EWC Lambda ($\lambda$)**: 1000 (Importance weight penalty)
-- **Fisher Memory Dampening Factor ($\alpha$)**: 0.5
+- **EWC Lambda ($\lambda$)**: 5000 (Importance weight penalty)
+- L2 weight decay : 1e-5
+-  Batch size : 256
 ---
 
 ## Results and Graphs
