@@ -1,7 +1,5 @@
 # AI Usage & Methodology — Catastrophic Forgetting Reproduction Project
 
-# AI Usage & Methodology — Catastrophic Forgetting Reproduction Project
-
 ## AI Tool Used
 
 Throughout all stages of this project we used **Claude (Anthropic)** as our primary AI assistant. The usage was not a one-time interaction — it was an ongoing working relationship covering everything from initial paper comprehension to final debugging of the Fisher overlap graph.
