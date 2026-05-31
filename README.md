@@ -87,7 +87,7 @@ A deeper MLP used solely for the Fisher overlap experiment:
  
 Results are visualized across three benchmarks mirroring the original paper's Figure 2.
  
-### 1. Figure 2A — Per-Task Accuracy Timeline (EWC vs L2 vs SGD)
+### 1. Figure A — Per-Task Accuracy Timeline (EWC vs L2 vs SGD)
 This plot tracks test accuracy on the first three tasks epoch-by-epoch across the first 60 epochs of sequential training (3 tasks × 20 epochs each).
  
 ![Continual Learning Accuracy Timeline](images/continual_learning_V4.png.png)
@@ -106,7 +106,7 @@ This plot shows the average fraction correct across all tasks learned so far, me
 - **EWC drop (first → last)**: +0.066
 EWC maintains higher average accuracy than SGD+dropout across the full 10-task sequence, staying close to the single-task reference ceiling throughout. The gap widens as more tasks accumulate, demonstrating EWC's advantage in long-horizon continual learning.
  
-### 3. Figure 2C — Fisher Overlap vs Network Depth
+### 3. Figure C — Fisher Overlap vs Network Depth
 This plot measures the overlap between the diagonal Fisher Information Matrices of two sequentially trained tasks, computed per layer across a 6-hidden-layer network. Two permutation regimes are compared.
  
 ![Fisher Overlap vs Network Depth](images/fisher_overlap_v4.png)
