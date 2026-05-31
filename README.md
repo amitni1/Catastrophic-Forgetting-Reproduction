@@ -95,7 +95,7 @@ This plot tracks test accuracy on the first three tasks epoch-by-epoch across th
 - **SGD (blue)**: Suffers from catastrophic forgetting. Task A accuracy remains stable while training on Task A, but erodes as the network is repurposed for Tasks B and C.
 - **L2 (green)**: The uniform penalty partially slows forgetting but cannot discriminate between critical and non-critical weights.
 - **EWC (red)**: Maintains Task A accuracy throughout training on Tasks B and C by anchoring important weights. All three methods converge similarly on the current task being trained, confirming EWC does not impair forward transfer.
-### 2. Figure 2B — Average Accuracy Across All Tasks Seen
+### 2. Figure B — Average Accuracy Across All Tasks Seen
 This plot shows the average fraction correct across all tasks learned so far, measured at the end of each task, from task 2 through task 10.
  
 ![Average Performance Over Tasks](images/average_accuracy_fig2b_v4.png)
