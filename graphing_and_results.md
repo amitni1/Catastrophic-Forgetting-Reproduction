@@ -242,7 +242,7 @@ The paper plots per-task test accuracy over training time for EWC and SGD. EWC c
 
 ### Our Replication
 
-![Our Fig 2A replication](image.png)
+![Our Fig 2A replication](images/continual_learning_V4.png.png)
 
 *Our Fig 2A replication — Continual Learning: EWC (λ=100) vs L2 vs SGD tracking Tasks A, B, C over 60 epochs*
  
@@ -253,7 +253,7 @@ The paper plots per-task test accuracy over training time for EWC and SGD. EWC c
 
 ### Our Replication
 
-![Our Fig 2B replication](average_accuracy_v3.png)
+![Our Fig 2B replication](images/average_accuracy_fig2b_v4.png)
 
 *Our Fig 2B replication — Average Fraction Correct vs Number of Tasks (EWC vs SGD+dropout)*
  
@@ -276,7 +276,7 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 
 ### Our Replication
 
-![Our Fig 2C replication](image2.png)
+![Our Fig 2C replication](images/fisher_overlap_v4.png)
 
 *Our Fig 2C replication — Fisher Overlap vs Depth across 6 layers (low % permutation: 8×8; high % permutation: 26×26)*
 
