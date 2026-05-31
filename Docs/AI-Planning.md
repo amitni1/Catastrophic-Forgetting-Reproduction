@@ -105,13 +105,14 @@ For **controlling task similarity**, use partial permutations — instead of shu
 
 ```python
 def create_partial_permutation(size):
+    """Permute only a (size x size) square centred in the 28x28 image."""
     perm = torch.arange(28 * 28)
-    grid = perm.view(28, 28)
+    grid = perm.view(28, 28).clone()
     start = (28 - size) // 2
-    end = start + size
-    region = grid[start:end, start:end].flatten()
-    shuffled_region = region[torch.randperm(len(region))]
-    grid[start:end, start:end] = shuffled_region.view(size, size)
+    end   = start + size
+    region   = grid[start:end, start:end].flatten()
+    shuffled = region[torch.randperm(len(region))]
+    grid[start:end, start:end] = shuffled.view(size, size)
     return grid.flatten()
 ```
 
