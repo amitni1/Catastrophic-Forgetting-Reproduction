@@ -8,6 +8,12 @@ This document details how EWC was used in our project and how each section of co
 
 When a neural network is trained sequentially on multiple tasks, it tends to **catastrophically forget** earlier tasks — the gradient updates for the new task overwrite the weights that were important for the old one. EWC, introduced by Kirkpatrick et al. (2017), addresses this by adding a regularization penalty that slows down changes to weights that were important for previous tasks. The "importance" of each weight is measured using the **Fisher Information Matrix**.
 
+**What changed from earlier versions:** Two prior failure modes were identified and fixed:
+- Under-estimated (batch-averaged) Fisher caused Figure 2B average accuracy to collapse to ~0.8.
+- Correct Fisher combined with stiff lambda + gradient clipping + limited capacity over-constrained the network, dropping Figure 2B to ~0.7.
+
+The current version uses: (1) correct per-sample Fisher, (2) paper-exact separate penalties per task, (3) no gradient clipping, (4) wider network (up to 2000 units), and (5) a dedicated single-task reference model for the dashed baseline.
+
 ---
 
 ## Section 1 — Imports and Device Setup
@@ -27,23 +33,71 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'Using device: {device}')
 ```
 
-**What it does:** Standard PyTorch setup. Imports the necessary libraries and selects GPU if available, otherwise CPU. `numpy` is also imported for averaging accuracy metrics in the Figure 2B plot.
+**What it does:** Standard PyTorch setup. Imports the necessary libraries and selects GPU if available, otherwise CPU. `numpy` is imported for averaging accuracy metrics. `copy` is used for deep-copying model state dicts in the dropout baseline's early stopping logic.
 
 **EWC relevance:** EWC involves computing Fisher matrices and cloning model weights — both are memory-intensive operations. Running on GPU significantly speeds this up for larger experiments.
 
 ---
 
-## Section 2 — Data: Permuted MNIST Tasks
+## Section 2 — Configuration
+
+All hyperparameters are centralized in one config block for easy tuning.
+
+```python
+NUM_TASKS        = 10
+WIDTH            = 2000     # paper: Fig 2A=400, Fig 2B allowed up to 2000
+EPOCHS_PER_TASK  = 20
+LR               = 1e-3
+MOMENTUM         = 0.9
+BATCH_SIZE       = 256
+
+FISHER_SAMPLES   = 2048
+NORMALIZE_PENALTY = True
+
+LAMBDA           = 100
+
+L2_LAMBDA           = 1.0
+EARLY_STOP_PATIENCE = 5
+
+SEED             = 0
+```
+
+**Key hyperparameters:**
+
+| Parameter | Value | Role |
+|---|---|---|
+| `WIDTH` | 2000 | Hidden layer width. Wider networks give EWC more room to find low-interference weight configurations. |
+| `EPOCHS_PER_TASK` | 20 | Training epochs per task. Raising to 40–100 helps if the EWC line droops. |
+| `LR` | 1e-3 | Learning rate. Lower to 5e-4 if the run diverges (avoids needing gradient clipping). |
+| `LAMBDA` | 100 | EWC penalty strength. Lambda and Fisher scale are coupled; old-notebook values do **not** transfer. Try values across ~2 orders of magnitude. |
+| `FISHER_SAMPLES` | 2048 | Number of examples used to estimate the Fisher. Higher = lower variance, slower. |
+| `L2_LAMBDA` | 1.0 | Uniform quadratic penalty strength for the L2 baseline. |
+| `EARLY_STOP_PATIENCE` | 5 | Steps of non-improving validation accuracy before the dropout baseline stops training on a task. |
+
+**EWC relevance:** `LAMBDA` is the most sensitive hyperparameter. Too low → EWC doesn't protect old tasks. Too high → the model can't learn new tasks. Because the penalty is summed across all past tasks, the total constraint grows as tasks accumulate, which is why old lambda values from notebooks using a single accumulated Fisher do not carry over.
+
+---
+
+## Section 3 — Data: Permuted MNIST Tasks
 
 ```python
 transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.1307,), (0.3081,))
+    transforms.Normalize((0.1307,), (0.3081,)),
 ])
 
-train_dataset = datasets.MNIST('./data', train=True,  download=True, transform=transform)
-test_dataset  = datasets.MNIST('./data', train=False, download=True, transform=transform)
+full_train = datasets.MNIST('./data', train=True,  download=True, transform=transform)
+full_test  = datasets.MNIST('./data', train=False, download=True, transform=transform)
+
+val_size   = 10000
+train_size = len(full_train) - val_size
+train_base, val_base = torch.utils.data.random_split(
+    full_train, [train_size, val_size],
+    generator=torch.Generator().manual_seed(42),
+)
 ```
+
+The full 60 000-example training set is split into 50 000 training examples and a 10 000-example validation set (held out for the dropout baseline's per-task early stopping). The test set remains the standard 10 000-example MNIST test split.
 
 ### The `PermutedMNIST` Dataset Class
 
@@ -63,41 +117,41 @@ class PermutedMNIST(torch.utils.data.Dataset):
         return img, label
 ```
 
-**What it does:** Wraps MNIST and optionally shuffles the pixels of each image according to a fixed random permutation. Task 0 has no permutation (standard MNIST). Tasks 1–9 each have a unique random pixel shuffle applied to every image. The `__len__` method is included for compatibility with PyTorch's DataLoader.
+**What it does:** Wraps any dataset and optionally shuffles every image's pixels according to a fixed random permutation. Task 0 has no permutation (standard MNIST). Tasks 1–9 each apply a unique random pixel shuffle to every image.
 
-**EWC relevance:** Permuted MNIST is the classic benchmark for continual learning. Each permuted version is a *structurally different* task — the labels are the same (0–9), but the input distribution changes completely. A model trained on Task 1 must not forget Task 0. This is exactly the scenario EWC was designed for.
+**EWC relevance:** Permuted MNIST is the classic continual learning benchmark. Each permutation creates a structurally different input distribution while keeping the same labels (0–9). A network trained on Task 1 must not lose its Task 0 performance — exactly the scenario EWC was designed for.
 
 ```python
 torch.manual_seed(42)
-
-num_tasks = 10
 tasks = {}
-for i in range(num_tasks):
+for i in range(NUM_TASKS):
     perm = None if i == 0 else torch.randperm(28 * 28)
     tasks[i] = {
-        'train': DataLoader(PermutedMNIST(train_dataset, perm), batch_size=256, shuffle=True),
-        'test':  DataLoader(PermutedMNIST(test_dataset,  perm), batch_size=1000, shuffle=False)
+        'train': DataLoader(PermutedMNIST(train_base, perm), batch_size=BATCH_SIZE, shuffle=True),
+        'val':   DataLoader(PermutedMNIST(val_base,   perm), batch_size=1000,       shuffle=False),
+        'test':  DataLoader(PermutedMNIST(full_test,  perm), batch_size=1000,       shuffle=False),
+        'perm':  perm,
     }
 ```
 
-Creates 10 tasks with a fixed random seed for reproducibility. Task 0 = standard MNIST, Tasks 1–9 = different pixel permutations. Both train and test loaders are stored per task. Note the batch size is **256** (larger than the original paper's 64, for faster training).
+Creates 10 tasks with a fixed seed for reproducibility. Each task stores three loaders: `train` (50k), `val` (10k, used only by the dropout baseline for early stopping), and `test` (standard 10k). The permutation is also saved for reference.
 
 ---
 
-## Section 3 — Neural Network Architectures
+## Section 4 — Neural Network Architectures
 
-Three model classes are defined to support the three figures being replicated.
+Two model classes are defined for the main experiments.
 
 ### `Net` — 2 Hidden Layers (Figures 2A and 2B)
 
 ```python
 class Net(nn.Module):
-    """2 hidden layers x 400 units. Used for Fig 2A and 2B."""
-    def __init__(self):
+    """2 hidden layers, configurable width."""
+    def __init__(self, width=400):
         super().__init__()
-        self.fc1 = nn.Linear(784, 400)
-        self.fc2 = nn.Linear(400, 400)
-        self.fc3 = nn.Linear(400, 10)
+        self.fc1 = nn.Linear(784, width)
+        self.fc2 = nn.Linear(width, width)
+        self.fc3 = nn.Linear(width, 10)
 
     def forward(self, x):
         x = x.view(-1, 784)
@@ -106,20 +160,20 @@ class Net(nn.Module):
         return self.fc3(x)
 ```
 
-A compact MLP: 784-input → 400 → 400 → 10. No softmax in `forward`; cross-entropy loss handles it internally.
+A compact MLP: 784-input → `width` → `width` → 10. The width is configurable (default 400; set to 2000 via `WIDTH` in the config). No softmax in `forward`; cross-entropy loss handles it internally. All three main models (EWC, SGD, L2) share this architecture.
 
 ### `NetDropout` — SGD+Dropout Baseline (Figure 2B)
 
 ```python
 class NetDropout(nn.Module):
-    """Same as Net but with dropout — SGD+dropout baseline for Fig 2B."""
-    def __init__(self):
+    """Same architecture + dropout (0.2 input, 0.5 hidden) for the SGD+dropout baseline."""
+    def __init__(self, width=400):
         super().__init__()
-        self.drop_in  = nn.Dropout(0.2)
-        self.fc1      = nn.Linear(784, 400)
-        self.drop_h   = nn.Dropout(0.5)
-        self.fc2      = nn.Linear(400, 400)
-        self.fc3      = nn.Linear(400, 10)
+        self.drop_in = nn.Dropout(0.2)
+        self.fc1     = nn.Linear(784, width)
+        self.drop_h  = nn.Dropout(0.5)
+        self.fc2     = nn.Linear(width, width)
+        self.fc3     = nn.Linear(width, 10)
 
     def forward(self, x):
         x = x.view(-1, 784)
@@ -131,310 +185,342 @@ class NetDropout(nn.Module):
         return self.fc3(x)
 ```
 
-Same architecture as `Net` but with 20% input dropout and 50% hidden dropout. This provides a regularization baseline to compare against EWC in Figure 2B.
-
-### `NetDeep` — 6 Hidden Layers (Figure 2C Fisher Overlap)
-
-```python
-class NetDeep(nn.Module):
-    """6 hidden layers x 200 units. Used for Fig 2C Fisher overlap."""
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(784, 200)
-        self.fc2 = nn.Linear(200, 200)
-        self.fc3 = nn.Linear(200, 200)
-        self.fc4 = nn.Linear(200, 200)
-        self.fc5 = nn.Linear(200, 200)
-        self.fc6 = nn.Linear(200, 200)
-        self.fc7 = nn.Linear(200, 10)
-
-    def forward(self, x):
-        x = x.view(-1, 784)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = F.relu(self.fc4(x))
-        x = F.relu(self.fc5(x))
-        x = F.relu(self.fc6(x))
-        return self.fc7(x)
-```
-
-A deeper MLP: 784 → 6 × 200 → 10. Used exclusively for the Fisher Overlap experiment (Section 8). Its 6 named hidden layers (`fc1`–`fc6`) allow per-layer Fisher comparisons across depth.
-
-**EWC relevance:** A key result in the EWC paper is that Fisher overlap (the degree to which different tasks share important parameters) *varies across layers*. Deeper layers tend to be more task-specific, while earlier layers are shared. `NetDeep` is designed to expose this structure.
+Same architecture as `Net` with configurable width, plus 20% input dropout and 50% hidden dropout applied after each hidden layer. This is the regularization baseline compared against EWC in Figure 2B. Unlike earlier versions, the dropout model also uses per-task early stopping based on validation accuracy (see Section 6).
 
 ---
 
-## Section 4 — Core EWC Functions
+## Section 5 — Core EWC Functions
 
 This is the mathematical heart of the code.
 
-### `compute_fisher` — Computing the Fisher Information Matrix
+### `compute_fisher` — Correct Per-Sample Fisher
 
 ```python
 def compute_fisher(model, data_loader, num_samples=1024):
-    fisher = {n: torch.zeros_like(p.data) for n, p in model.named_parameters()}
+    """True diagonal Fisher: E[(d log p / d theta)^2], estimated per-sample."""
+    fisher = {n: torch.zeros_like(p) for n, p in model.named_parameters()}
     model.eval()
-    samples_seen = 0
-
-    for data, target in data_loader:
-        if samples_seen >= num_samples:
+    seen = 0
+    for data, _ in data_loader:
+        data = data.to(device)
+        for x in data:
+            if seen >= num_samples:
+                break
+            x = x.unsqueeze(0)
+            model.zero_grad()
+            logits = model(x)
+            log_p  = F.log_softmax(logits, dim=1)
+            p      = F.softmax(logits, dim=1).clamp_min(1e-8)
+            p      = p / p.sum(dim=1, keepdim=True)
+            y      = torch.multinomial(p, 1).squeeze(1)
+            loss   = F.nll_loss(log_p, y)
+            loss.backward()
+            for n, par in model.named_parameters():
+                if par.grad is not None:
+                    fisher[n] += par.grad.detach() ** 2
+            seen += 1
+        if seen >= num_samples:
             break
-        data, target = data.to(device), target.to(device)
-        model.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(F.log_softmax(output, dim=1), target)
-        loss.backward()
-
-        for n, p in model.named_parameters():
-            if p.grad is not None:
-                fisher[n] += p.grad.data ** 2 * len(data)
-        samples_seen += len(data)
-
     for n in fisher:
-        fisher[n] /= samples_seen
+        fisher[n] /= max(seen, 1)
+    model.zero_grad()
     return fisher
 ```
 
-**What it does:** Computes the **empirical Fisher Information Matrix** (diagonal) for each parameter, capped at `num_samples` examples (default 1024).
+**What it does:** Computes the **true diagonal Fisher Information Matrix** for each parameter, processing one example at a time, capped at `num_samples` examples (default 1024; raised to 2048 in the config and 8192 for Figure 2C).
 
-**The math:** The diagonal Fisher Information Matrix measures how sensitive the model's output is to each parameter. It is approximated as the squared gradient of the log-likelihood, averaged over data:
+**Why per-sample matters:** Earlier versions computed Fisher in mini-batches and averaged gradients before squaring them. This *under-estimates* the Fisher because `E[g]² ≠ E[g²]`. The correct estimate squares each *individual* gradient before averaging. Processing one sample at a time ensures this is exact.
 
+**Label sampling:** Rather than using the true label `target` (which is ignored — note `for data, _ in data_loader`), the label is **sampled from the model's own predictive distribution** via `torch.multinomial`. This is the true Fisher (Laplace approximation from the paper), not the empirical Fisher.
+
+**The math:**
 ```
 F_i = E[ (∂ log p(y|x,θ) / ∂θ_i)² ]
 ```
 
-**Implementation detail:** Gradients are accumulated weighted by batch size (`* len(data)`) and then divided by `samples_seen` at the end — this is a numerically stable running average that handles non-uniform final batches correctly.
-
-A **large Fisher value** for a parameter means that parameter is important for the current task — changing it would significantly hurt performance.
+A **large Fisher value** for a parameter means that parameter is highly important for the current task — changing it would significantly hurt performance.
 
 ---
 
-### `ewc_penalty` — The EWC Regularization Term
+### `ewc_penalty_multi` — The EWC Regularization Term
 
 ```python
-def ewc_penalty(model, fisher_matrices, opt_weights):
+def ewc_penalty_multi(model, ewc_tasks, normalize=True):
     penalty = 0.0
-    for task_id in fisher_matrices:
+    for task in ewc_tasks:
+        fisher = task['fisher']
+        anchor = task['anchor']
         for n, p in model.named_parameters():
-            f     = fisher_matrices[task_id][n]
-            p_old = opt_weights[task_id][n]
-            penalty += (f * (p - p_old) ** 2).sum()
+            penalty += (fisher[n] * (p - anchor[n]) ** 2).sum()
+    if normalize and len(ewc_tasks) > 0:
+        penalty = penalty / len(ewc_tasks)
     return penalty
 ```
 
-**What it does:** Computes the EWC penalty term summed over all previously seen tasks.
+**What it does:** Computes the EWC penalty term summed over all previously seen tasks, then optionally divides by the number of tasks to normalize the total penalty.
 
-**The math:** The EWC loss for a new task B, given prior tasks, is:
+**The math:** The EWC loss for a new task, given prior tasks, is:
 
 ```
-L_total = L_B(θ) + (λ/2) * Σ_tasks Σ_i F_i * (θ_i - θ_i*)²
+L_total = L_new(θ) + (λ/2) × Σ_tasks Σ_i F_i × (θ_i − θ_i*)²
 ```
 
 Where:
-- `L_B(θ)` — the standard cross-entropy loss on the new task
-- `F_i` — the Fisher importance of parameter `i` for the old task
-- `θ_i*` — the optimal weight value learned after the old task
+- `L_new(θ)` — the standard cross-entropy loss on the current task
+- `F_i` — the Fisher importance of parameter `i` for a past task
+- `θ_i*` — the optimal weight value stored after that past task finished training
 - `λ` — a hyperparameter controlling how strongly to protect old weights
 
-Intuitively: weights that were important for old tasks (high Fisher) are penalized heavily if they deviate from their previously learned values. The penalty accumulates across **all previously seen tasks**, not just the most recent one.
+**Paper-exact "separate penalties" scheme:** Each completed task contributes its *own* Fisher and its *own* anchor to the sum. This is equation 3 from Kirkpatrick et al. (2017). An alternative ("online EWC") accumulates a single running Fisher, which is a different algorithm and produces different results.
+
+**Normalization:** When `normalize=True` (the default), the penalty is divided by the number of prior tasks. This keeps the total penalty magnitude roughly constant as more tasks accumulate, which simplifies lambda tuning.
 
 ---
 
-### `test_model` — Evaluation
+### `test_model` and `avg_val_acc` — Evaluation
 
 ```python
-def test_model(model, test_loader):
+def test_model(model, loader):
     model.eval()
     correct = 0
     with torch.no_grad():
-        for data, target in test_loader:
+        for data, target in loader:
             data, target = data.to(device), target.to(device)
-            pred = model(data).argmax(dim=1)
-            correct += pred.eq(target).sum().item()
-    return correct / len(test_loader.dataset)
+            correct += model(data).argmax(dim=1).eq(target).sum().item()
+    return correct / len(loader.dataset)
+
+def avg_val_acc(model, loaders):
+    return float(np.mean([test_model(model, ldr) for ldr in loaders]))
 ```
 
-Standard accuracy evaluation. Returns accuracy as a **fraction** (0.0–1.0), not a percentage. Both `data` and `target` are moved to device — important for GPU compatibility.
+`test_model` returns accuracy as a **fraction** (0.0–1.0) over the full loader. `avg_val_acc` averages `test_model` across a list of loaders — used by the dropout baseline to compute average validation accuracy over all tasks seen so far during early stopping.
 
 ---
 
-## Section 5 — Hyperparameters and Model Initialization
+## Section 6 — EWC Training Loop
 
 ```python
-torch.manual_seed(0)
+def train_ewc_sequence(lamda, width=WIDTH, epochs=EPOCHS_PER_TASK,
+                       lr=LR, fisher_samples=FISHER_SAMPLES, seed=SEED,
+                       record_history=False, verbose=True):
+    torch.manual_seed(seed); np.random.seed(seed)
+    ...
+    model = Net(width).to(device)
+    opt   = optim.SGD(model.parameters(), lr=lr, momentum=MOMENTUM)
 
-epochs_per_task = 20
-lr              = 1e-3
-lamda           = 5000
-l2_weight_decay = 1e-5
+    ewc_tasks = []
+    history   = {i: [] for i in range(NUM_TASKS)}
+    snapshots = []
 
-model_ewc     = Net().to(device)
-model_l2      = Net().to(device)
-model_sgd     = Net().to(device)
-model_dropout = NetDropout().to(device)
+    for task_id in range(NUM_TASKS):
+        train_loader = tasks[task_id]['train']
+        for epoch in range(epochs):
+            model.train()
+            for data, target in train_loader:
+                data, target = data.to(device), target.to(device)
+                opt.zero_grad()
+                loss = F.cross_entropy(model(data), target)
+                if ewc_tasks:
+                    loss = loss + (lamda / 2.0) * ewc_penalty_multi(model, ewc_tasks, normalize=NORMALIZE_PENALTY)
+                loss.backward()
+                opt.step()   # no gradient clipping
+            if record_history:
+                for tid in range(NUM_TASKS):
+                    history[tid].append(test_model(model, tasks[tid]['test']))
 
-opt_ewc     = optim.SGD(model_ewc.parameters(),     lr=lr, momentum=0.9)
-opt_l2      = optim.SGD(model_l2.parameters(),      lr=lr, momentum=0.9, weight_decay=l2_weight_decay)
-opt_sgd     = optim.SGD(model_sgd.parameters(),     lr=lr, momentum=0.9)
-opt_dropout = optim.SGD(model_dropout.parameters(), lr=lr, momentum=0.9)
+        # ---- consolidate: store this task's own Fisher + anchor ----
+        new_fisher = compute_fisher(model, train_loader, fisher_samples)
+        new_anchor = {n: p.detach().clone() for n, p in model.named_parameters()}
+        ewc_tasks.append({'fisher': new_fisher, 'anchor': new_anchor})
 
-fisher_matrices = {}
-opt_weights     = {}
-
-history_ewc     = {i: [] for i in range(num_tasks)}
-history_l2      = {i: [] for i in range(num_tasks)}
-history_sgd     = {i: [] for i in range(num_tasks)}
-history_dropout = {i: [] for i in range(num_tasks)}
+        if task_id >= 1:
+            seen = list(range(task_id + 1))
+            snapshots.append(float(np.mean([test_model(model, tasks[t]['test']) for t in seen])))
+    ...
+    return {'snapshots': snapshots, 'history': history, 'model': model}
 ```
 
-**Four models are initialized** — each representing a different training strategy being compared:
+**What it does:** Trains a single `Net` model across all 10 tasks sequentially using EWC.
+
+**Critical EWC workflow per task:**
+1. **Train** with EWC loss (cross-entropy + penalty from all past tasks). The `if ewc_tasks:` check skips the penalty on Task 0 since there is no prior.
+2. **After training completes**, compute the Fisher over that task's training data using the correct per-sample estimator.
+3. **Clone and store** the current weights as the anchor for this task.
+4. Both the Fisher and anchor are appended to `ewc_tasks` — the penalty list grows with each new task.
+
+**No gradient clipping:** Gradient clipping was found in earlier versions to suppress the EWC consolidation force, preventing the model from learning to stay near old weights. It has been removed entirely.
+
+**Snapshot tracking:** After each task (starting from Task 2), the average test accuracy across all tasks seen so far is recorded in `snapshots`. This is the y-axis of Figure 2B.
+
+**History tracking:** When `record_history=True`, per-epoch test accuracy on all 10 tasks is recorded in `history`, providing the full accuracy curves for Figure 2A.
+
+---
+
+## Section 7 — Single-Task Reference
+
+```python
+torch.manual_seed(99)
+model_single = Net(WIDTH).to(device)
+opt_single   = optim.SGD(model_single.parameters(), lr=LR, momentum=MOMENTUM)
+
+for ep in range(EPOCHS_PER_TASK):
+    model_single.train()
+    for data, target in tasks[0]['train']:
+        data, target = data.to(device), target.to(device)
+        opt_single.zero_grad()
+        F.cross_entropy(model_single(data), target).backward()
+        opt_single.step()
+
+single_task_perf = test_model(model_single, tasks[0]['test'])
+```
+
+**What it does:** Trains a dedicated `Net` model on Task 0 only, using a separate random seed. Its test accuracy becomes the dashed horizontal line in Figure 2B — the theoretical ceiling representing what a model can achieve if it never has to balance multiple tasks.
+
+**Why a dedicated model:** Using the EWC model's Task 0 performance as the reference would conflate the single-task ceiling with the EWC run's specific hyperparameters. A fully independent model gives a clean, unbiased reference.
+
+---
+
+## Section 8 — Baselines Training Loop
+
+```python
+def train_baselines(width=WIDTH, epochs=EPOCHS_PER_TASK, lr=LR,
+                    l2_lambda=L2_LAMBDA, patience=EARLY_STOP_PATIENCE, seed=SEED):
+    ...
+    m_sgd  = Net(width).to(device)
+    m_l2   = Net(width).to(device)
+    m_drop = NetDropout(width).to(device)
+    ...
+    l2_anchor = None
+    ...
+    for task_id in range(NUM_TASKS):
+        train_loader = tasks[task_id]['train']
+        val_loaders  = [tasks[t]['val'] for t in range(task_id + 1)]
+
+        best_val = -1.0; best_state = copy.deepcopy(m_drop.state_dict()); no_improve = 0; stopped = False
+
+        for epoch in range(epochs):
+            # SGD: pure cross-entropy, no memory
+            o_sgd.zero_grad()
+            F.cross_entropy(m_sgd(data), target).backward()
+            o_sgd.step()
+
+            # L2: cross-entropy + uniform quadratic penalty from task anchor
+            o_l2.zero_grad()
+            loss_l2 = F.cross_entropy(m_l2(data), target)
+            if l2_anchor is not None:
+                pen = sum(((p - l2_anchor[n]) ** 2).sum() for n, p in m_l2.named_parameters())
+                loss_l2 = loss_l2 + (l2_lambda / 2.0) * pen
+            loss_l2.backward(); o_l2.step()
+
+            # Dropout: early stopping once val accuracy stops improving
+            if not stopped:
+                o_drop.zero_grad()
+                F.cross_entropy(m_drop(data), target).backward()
+                o_drop.step()
+
+            # Early stopping check for dropout model
+            if not stopped:
+                val_avg = avg_val_acc(m_drop, val_loaders)
+                if val_avg > best_val:
+                    best_val = val_avg; best_state = copy.deepcopy(m_drop.state_dict()); no_improve = 0
+                else:
+                    no_improve += 1
+                    if no_improve >= patience:
+                        m_drop.load_state_dict(best_state); stopped = True
+        if not stopped:
+            m_drop.load_state_dict(best_state)
+
+        l2_anchor = {n: p.detach().clone() for n, p in m_l2.named_parameters()}
+        ...
+```
+
+**Three baselines trained together in one function:**
 
 | Model | Strategy | Description |
 |---|---|---|
-| `model_ewc` | EWC | Cross-entropy + Fisher penalty (our method) |
-| `model_sgd` | SGD | Cross-entropy only, no memory |
-| `model_l2` | L2 regularization | Weight decay via `weight_decay=1e-5` |
-| `model_dropout` | SGD + Dropout | Uses `NetDropout` with 20%/50% dropout rates |
+| `m_sgd` | SGD only | Cross-entropy with no memory of past tasks. Forgets aggressively. |
+| `m_l2` | L2 regularization | Uniform quadratic penalty pulling weights toward the previous task's endpoint. Does not know which weights are important — treats all equally. |
+| `m_drop` | SGD + Dropout | Uses `NetDropout` with 20%/50% dropout. Includes per-task early stopping on average validation accuracy across all tasks seen so far. |
 
-**Key hyperparameters:**
+**L2 anchor logic:** After each task, the current weights of `m_l2` are saved as `l2_anchor`. On the next task, the L2 penalty pulls weights back toward this anchor. This is the standard L2 continual learning baseline — unlike EWC, it cannot selectively weight the penalty by parameter importance.
 
-| Parameter | Value | Role |
-|---|---|---|
-| `epochs_per_task` | 20 | Training epochs per task (more than the paper for visible forgetting) |
-| `lr` | 1e-3 | Learning rate |
-| `lamda` (λ) | 5000 | EWC penalty strength |
-| `l2_weight_decay` | 1e-5 | L2 regularization strength (kept weak so it degrades more than EWC) |
-
-**EWC relevance:** `lamda` is the most sensitive hyperparameter. Too low → EWC doesn't protect old tasks. Too high → the model can't learn new tasks at all. 5000 is chosen here to produce clear visual separation between EWC and the baselines.
-
-The `fisher_matrices` and `opt_weights` dictionaries accumulate knowledge from all previously seen tasks and grow with each new task.
+**Dropout early stopping:** At the end of each epoch, `avg_val_acc` is computed over the validation loaders for all tasks seen so far. If it fails to improve for `EARLY_STOP_PATIENCE` consecutive epochs, training on the current task stops and the best-seen weights are restored. This is the paper's stopping criterion for the SGD+dropout baseline.
 
 ---
 
-## Section 6 — The Main Training Loop
+## Section 9 — Figure 2A: Training Curves for Tasks A, B, C
 
 ```python
-for task_id, task_data in tasks.items():
-    print(f'\n=== Task {task_id + 1}/{num_tasks} ===')
-    train_loader = task_data['train']
+epochs_to_show = 3 * EPOCHS_PER_TASK
+x = range(1, epochs_to_show + 1)
 
-    for epoch in range(epochs_per_task):
-        model_ewc.train(); model_l2.train(); model_sgd.train(); model_dropout.train()
-
-        for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
-
-            # SGD baseline
-            opt_sgd.zero_grad()
-            F.cross_entropy(model_sgd(data), target).backward()
-            opt_sgd.step()
-
-            # L2 baseline
-            opt_l2.zero_grad()
-            F.cross_entropy(model_l2(data), target).backward()
-            opt_l2.step()
-
-            # SGD+Dropout baseline
-            opt_dropout.zero_grad()
-            F.cross_entropy(model_dropout(data), target).backward()
-            opt_dropout.step()
-
-            # EWC
-            opt_ewc.zero_grad()
-            loss_ewc = F.cross_entropy(model_ewc(data), target)
-            if fisher_matrices:
-                loss_ewc += (lamda / 2) * ewc_penalty(model_ewc, fisher_matrices, opt_weights)
-            loss_ewc.backward()
-            opt_ewc.step()
-
-        for tid in range(num_tasks):
-            history_ewc[tid].append(    test_model(model_ewc,     tasks[tid]['test']))
-            history_l2[tid].append(     test_model(model_l2,      tasks[tid]['test']))
-            history_sgd[tid].append(    test_model(model_sgd,     tasks[tid]['test']))
-            history_dropout[tid].append(test_model(model_dropout, tasks[tid]['test']))
-
-        if (epoch + 1) % 5 == 0:
-            print(f'  Epoch {epoch+1:2d} | EWC A={history_ewc[0][-1]:.3f} | SGD A={history_sgd[0][-1]:.3f}')
-
-        total_epochs += 1
-
-    print(f'  Computing Fisher for task {task_id + 1}...')
-    fisher_matrices[task_id] = compute_fisher(model_ewc, train_loader)
-    opt_weights[task_id] = {n: p.data.clone() for n, p in model_ewc.named_parameters()}
-```
-
-**What it does:** Iterates through all 10 tasks sequentially. Within each task, all four models train for 20 epochs on that task's data. All four models share the same mini-batches.
-
-**Critical EWC workflow per task:**
-1. **Train** with EWC loss (cross-entropy + penalty from all past tasks). The `if fisher_matrices:` check skips the penalty on Task 0 since there is no prior.
-2. **After training completes** on the task, compute the Fisher matrix over that task's training data
-3. **Clone and store** the current weights as the "optimal weights" for this task
-4. The penalty dictionary grows: Task 2 is penalized by Fisher from Task 1; Task 3 by Fisher from Tasks 1 and 2; and so on
-
-**Accuracy tracking:** After every epoch, *all four models* are evaluated on *all 10 task test sets*. This records the complete forgetting trajectory in real time. Progress is printed every 5 epochs showing Task A accuracy for EWC vs SGD.
-
----
-
-## Section 7 — Figure 2A: Training Curves for Tasks A, B, C
-
-```python
-fig, axes = plt.subplots(3, 1, figsize=(10, 7), sharex=True)
-task_labels = ['Task A', 'Task B', 'Task C']
-x = range(1, total_epochs + 1)
-
-for ax, tid, label in zip(axes, [0, 1, 2], task_labels):
-    ax.plot(x, history_ewc[tid], color='red',   label='EWC', linewidth=1.5)
-    ax.plot(x, history_l2[tid],  color='green',  label='L2',  linewidth=1.5)
-    ax.plot(x, history_sgd[tid], color='blue',   label='SGD', linewidth=1.5)
-
-    for i in range(1, num_tasks):
-        ax.axvline(x=epochs_per_task * i, color='black', linestyle=':', alpha=0.4, linewidth=0.8)
-
-    ax.set_ylabel(f'{label}\nFrac. correct', fontsize=9)
-    ax.set_ylim([0.0, 1.05])
-    ax.set_yticks([0.8, 0.9, 1.0])
+fig, axes = plt.subplots(3, 1, figsize=(8, 7), sharex=True)
+for ax, tid, label in zip(axes, [0, 1, 2], ['Task A', 'Task B', 'Task C']):
+    ax.plot(x, history_ewc[tid][:epochs_to_show], color='red',   label='EWC', linewidth=1.5)
+    ax.plot(x, history_l2[tid][:epochs_to_show],  color='green', label='L2',  linewidth=1.5)
+    ax.plot(x, history_sgd[tid][:epochs_to_show], color='blue',  label='SGD', linewidth=1.5)
+    for i in range(1, 3):
+        ax.axvline(x=EPOCHS_PER_TASK * i, color='black', linestyle='--', alpha=0.6, linewidth=1.0)
     ...
 ```
 
-**What it shows:** The accuracy curves for the first three tasks (A, B, C) across all 200 training epochs (10 tasks × 20 epochs each). Three methods are plotted per panel: EWC (red), L2 (green), SGD (blue). Vertical dotted lines mark task boundaries.
+**What it shows:** The accuracy curves for the first three tasks (A, B, C) across the first 60 training epochs (3 tasks × `EPOCHS_PER_TASK`). Three methods are plotted per panel: EWC (red), L2 (green), SGD (blue). Vertical dashed lines mark task boundaries. Task labels are printed above each region.
 
 **What to expect:**
-- **SGD Task A** (blue): rises during Task A training, then collapses as Tasks B–J overwrite those weights
-- **EWC Task A** (red): rises and *stays high* even as new tasks are trained — the Fisher penalty protects it
-- **L2 Task A** (green): intermediate performance — weight decay provides some regularization but cannot selectively protect task-critical weights the way EWC can
+- **SGD Task A** (blue): rises during Task A training, then collapses as Tasks B and C overwrite those weights
+- **EWC Task A** (red): rises during Task A and *stays high* as new tasks train — the Fisher penalty protects the important weights
+- **L2 Task A** (green): intermediate performance — weight decay provides some protection but treats all weights equally and cannot match EWC's selective preservation
 
 **EWC relevance:** This is the qualitative demonstration of EWC working. EWC's accuracy remains stable while SGD's falls — this is **preventing catastrophic forgetting** in action.
 
 ---
 
-## Section 7B — Figure 2B: Average Accuracy Across All Seen Tasks
+## Section 10 — Figure 2B: Average Accuracy Across All Seen Tasks
 
 ```python
-single_task_perf = max(history_ewc[0][:epochs_per_task])
+x_tasks = list(range(2, NUM_TASKS + 1))
 
-x_tasks     = list(range(2, num_tasks + 1))
-ewc_avg     = []
-dropout_avg = []
-
-for i in range(1, num_tasks):
-    end_epoch = (i + 1) * epochs_per_task - 1
-    ewc_avg.append(    np.mean([history_ewc[t][end_epoch]     for t in range(i + 1)]))
-    dropout_avg.append(np.mean([history_dropout[t][end_epoch] for t in range(i + 1)]))
+fig, ax = plt.subplots(figsize=(5.4, 4.2))
+ax.plot(x_tasks, ewc_snapshots,     color='#d62728', marker='s', ...)
+ax.plot(x_tasks, dropout_snapshots, color='#1f77b4', marker='o', ...)
+ax.axhline(y=single_task_perf, color='black', linestyle='--', linewidth=1.0)
 ```
 
-**What it shows:** After training on each task, computes the *average accuracy across all tasks seen so far* for EWC vs SGD+Dropout. A dashed horizontal line marks the single-task performance ceiling (best Task A accuracy before any subsequent tasks). This is the canonical continual learning metric from the original EWC paper (Figure 2B).
+**What it shows:** After training on each task (starting at Task 2), the average test accuracy across all tasks seen so far is plotted for EWC vs SGD+Dropout. The dashed horizontal line marks `single_task_perf` — the independent single-task reference model's accuracy on Task 0. This is the canonical continual learning metric from the original EWC paper.
+
+**`ewc_snapshots` and `dropout_snapshots`:** These lists are populated during training (not post-hoc). Each element is the mean test accuracy across all tasks seen at the end of that task's training. `ewc_snapshots[0]` is the average after Task 2; `ewc_snapshots[-1]` is the average after all 10 tasks.
 
 **What to expect:**
 - **EWC**: average accuracy stays near the single-task performance dashed line — it retains past knowledge
-- **SGD+Dropout**: average accuracy degrades progressively as more tasks are added, since new tasks erode old memories
-- A flat EWC curve close to the single-task baseline is the ideal result
+- **SGD+Dropout**: average accuracy degrades progressively as more tasks are added
+- A flat EWC curve close to the dashed baseline is the target result (~0.93–0.96 with the current configuration)
 
 ---
 
-## Section 8 — Figure 2C: Fisher Overlap Across Layers
+## Section 11 — Figure 2C: Fisher Overlap Across Layers
 
-This section is an advanced analysis experiment replicating Figure 2C from the EWC paper.
+This section is an independent experiment replicating Figure 2C from the EWC paper. It trains its own networks and does not use `LAMBDA` or any of the models from the main experiment.
+
+### `NetDeep` — 6 Hidden Layers
+
+```python
+class NetDeep(nn.Module):
+    """6 hidden layers (fc1-fc6) x 100 units + output layer (fc7 -> 10 classes). Used for Fig 2C Fisher overlap."""
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(784, 100)
+        self.fc2 = nn.Linear(100, 100)
+        ...
+        self.fc6 = nn.Linear(100, 100)
+        self.fc7 = nn.Linear(100, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 784)
+        x = F.relu(self.fc1(x)); ...
+        return self.fc7(x)
+```
+
+A deeper MLP: 784 → 6 × 100 → 10. Its 6 named hidden layers (`fc1`–`fc6`) allow per-layer Fisher comparisons. Note: this uses 100 units per layer (not 200 as in earlier versions), matching the paper's Figure 2C configuration.
 
 ### Partial Permutation Generator
 
@@ -451,61 +537,71 @@ def create_partial_permutation(size):
     return grid.flatten()
 
 perm_low  = create_partial_permutation(8)    # shuffles an 8×8 central region
-perm_high = create_partial_permutation(26)   # shuffles nearly the entire image
+perm_high = create_partial_permutation(26)   # shuffles a 26×26 central region
 ```
 
-**What it does:** Instead of shuffling all pixels, this shuffles only a square region in the centre of each image. A small region (8×8) produces a task *very similar* to MNIST. A large region (26×26) produces a task *very different* from MNIST.
-
-**EWC relevance:** This controls **task similarity**. The Fisher overlap between tasks measures how much the two tasks rely on the same parameters.
+Instead of shuffling all pixels, only a square region in the centre of each image is shuffled. A small region (8×8, ~8% of pixels) produces a task very similar to MNIST. A large region (26×26, ~86% of pixels) produces a task very different from MNIST.
 
 ### Training Setup for the Overlap Experiment
 
-Two separate `NetDeep` models are trained sequentially — one for the low-permutation pair (base → 8×8 shuffle) and one for the high-permutation pair (base → 26×26 shuffle). Each model is trained for **100 epochs per task** (deliberately longer so Fisher distributions can specialize). Fisher is then computed over 8192 samples.
-
 ```python
-fisher_A_low  = compute_fisher(model_low,  loader_base, num_samples=8192)
-fisher_B_low  = compute_fisher(model_low,  loader_low,  num_samples=8192)
-fisher_A_high = compute_fisher(model_high, loader_base, num_samples=8192)
-fisher_B_high = compute_fisher(model_high, loader_high, num_samples=8192)
+FIG2C_EPOCHS = 100
+
+def train_sequential(loader_A, loader_B, epochs=FIG2C_EPOCHS):
+    model = NetDeep().to(device)
+    opt   = optim.SGD(model.parameters(), lr=1e-3, momentum=0.9)
+    # train on task A for `epochs` epochs
+    fisher_A = compute_fisher(model, loader_A, num_samples=8192)
+    # train on task B for `epochs` epochs
+    fisher_B = compute_fisher(model, loader_B, num_samples=8192)
+    return fisher_A, fisher_B
 ```
 
-### The Overlap Metric (Fréchet / Hellinger Distance)
+Two separate `NetDeep` models are trained sequentially — one for the low-permutation pair (base → 8×8) and one for the high-permutation pair (base → 26×26). Each model is trained for **100 epochs per task** so Fisher distributions can specialize. Fisher is computed over 8192 samples for low variance.
+
+### The Overlap Metric (Globally Normalized Hellinger Distance)
 
 ```python
-def calculate_overlap(f1, f2, layer_name, all_layers):
-    v1 = torch.cat([f1[layer_name+'.weight'].flatten(),
-                    f1[layer_name+'.bias'].flatten()]).clamp(min=0)
-    v2 = torch.cat([f2[layer_name+'.weight'].flatten(),
-                    f2[layer_name+'.bias'].flatten()]).clamp(min=0)
+def fisher_to_global_vector(fisher_dict, layer_names):
+    """Concatenate all weight+bias Fisher values into one flat global vector."""
+    parts = []
+    for name in layer_names:
+        parts.append(fisher_dict[name + '.weight'].flatten().clamp(min=0))
+        parts.append(fisher_dict[name + '.bias'].flatten().clamp(min=0))
+    return torch.cat(parts)
 
-    # normalise each to unit trace per layer
-    v1 = v1 / (v1.sum() + 1e-10)
-    v2 = v2 / (v2.sum() + 1e-10)
 
-    # Fréchet distance on diagonal matrices: d² = 0.5 * ||sqrt(F1) - sqrt(F2)||²_F
-    d2 = 0.5 * torch.sum((torch.sqrt(v1) - torch.sqrt(v2)) ** 2)
-    return 1.0 - d2.item()
+def calculate_overlap_correct(fisher_A, fisher_B, layer_names):
+    """Per-layer Fisher overlap using GLOBALLY normalised Fisher vectors."""
+    v_A = fisher_to_global_vector(fisher_A, layer_names)
+    v_B = fisher_to_global_vector(fisher_B, layer_names)
+    v_A = v_A / (v_A.sum() + 1e-10)
+    v_B = v_B / (v_B.sum() + 1e-10)
+    overlaps = []
+    idx = 0
+    for name in layer_names:
+        n  = fisher_A[name + '.weight'].numel() + fisher_A[name + '.bias'].numel()
+        sA = v_A[idx: idx + n]
+        sB = v_B[idx: idx + n]
+        idx += n
+        d2 = 0.5 * torch.sum((torch.sqrt(sA) - torch.sqrt(sB)) ** 2).item()
+        overlaps.append(max(0.0, 1.0 - d2))
+    return overlaps
 ```
 
-**What it does:** Computes the **overlap** (similarity) between the Fisher distributions of two tasks at a given layer. Weight and bias Fisher values are concatenated and clamped to non-negative (Fisher values should always be ≥ 0, the clamp guards against numerical noise). Both are then normalized to unit sum and compared via squared Hellinger distance.
+**What it does:** Computes the overlap (similarity) between the Fisher distributions of two tasks at each layer. Crucially, normalization is done **globally** — all layers are concatenated into a single vector and normalized together before computing per-layer overlap. This matches Appendix 4.3 of Kirkpatrick et al. (2017).
 
-Overlap = 1 means the tasks rely on *identical* parameters; Overlap = 0 means they rely on *completely different* parameters.
+An earlier version normalized each layer independently, which ignored the relative scale of Fisher mass across layers and produced misleading comparisons.
 
-```python
-layers = ['fc1', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6']
-overlap_low  = [calculate_overlap(fisher_A_low,  fisher_B_low,  l, layers) for l in layers]
-overlap_high = [calculate_overlap(fisher_A_high, fisher_B_high, l, layers) for l in layers]
-```
-
-Computes the 6-layer overlap profile for both the low-permutation and high-permutation task pairs.
+Overlap = 1 means the two tasks rely on identical parameters; Overlap = 0 means they rely on completely different parameters. The metric is based on squared Hellinger distance: `d² = 0.5 × ||√F_A − √F_B||²_F`, then converted to overlap as `1 − d²`.
 
 ### What the Graph Shows
 
 The final plot — **Fisher Overlap vs. Layer Depth** — reveals two key insights from the original EWC paper:
 
-1. **High-permutation tasks** (very different from MNIST) show *low overlap* across all layers — the tasks use different parts of the network
-2. **Low-permutation tasks** (similar to MNIST) show *higher overlap* — the tasks share important parameters
-3. **The overlap tends to decrease in deeper layers.** Earlier layers learn general low-level features (edges, textures) shared across tasks. Deeper layers specialize more per-task, so their Fisher distributions diverge. This justifies why EWC must protect weights *selectively* — the Fisher matrix acts as a precision mask that is naturally weaker in shared early layers and stronger in task-specific deep layers.
+1. **High-permutation tasks** (26×26, very different from MNIST) show *low overlap* across all layers — the tasks use different parameters throughout the network
+2. **Low-permutation tasks** (8×8, similar to MNIST) show *higher overlap* — the tasks share important parameters
+3. **Overlap tends to vary with layer depth.** Earlier layers learn low-level features shared across tasks; deeper layers specialize per-task, causing their Fisher distributions to diverge. This is why EWC must protect weights *selectively* — the Fisher matrix acts as a precision mask that adapts to the degree of task-specificity at each layer.
 
 ---
 
@@ -514,15 +610,27 @@ The final plot — **Fisher Overlap vs. Layer Depth** — reveals two key insigh
 | Step | Description |
 |---|---|
 | **1. Train on Task A** | Standard cross-entropy training |
-| **2. Compute Fisher (Task A)** | Run forward/backward on Task A data; store squared gradients (weighted average over up to 1024 samples) |
-| **3. Save weights (Task A)** | Clone current parameters as `θ_A*` |
-| **4. Train on Task B** | Cross-entropy + λ/2 × Σ F_A × (θ − θ_A*)² |
+| **2. Compute Fisher (Task A)** | One example at a time; label sampled from model's own distribution; squared gradient averaged over `FISHER_SAMPLES` examples |
+| **3. Save anchor (Task A)** | Clone current parameters as `θ_A*`; store together with Fisher as `{'fisher': ..., 'anchor': ...}` |
+| **4. Train on Task B** | Cross-entropy + `(λ/2)` × `ewc_penalty_multi` (sum over all stored tasks, optionally normalized) |
 | **5. Compute Fisher (Task B)** | Repeat for Task B |
-| **6. Save weights (Task B)** | Accumulate `opt_weights[B]` |
-| **7. Train on Task C** | Loss includes penalties from *both* Task A and Task B |
+| **6. Save anchor (Task B)** | Append to `ewc_tasks` list |
+| **7. Train on Task C** | Loss includes penalties from *both* Task A and Task B — separate Fisher and anchor for each |
 | **...** | Repeat, growing the penalty sum across all past tasks |
 
 The key insight: **the Fisher Information Matrix acts as a Bayesian prior**, encoding which weights matter for past tasks so that the optimizer can balance learning new information against forgetting old information.
+
+---
+
+## Troubleshooting: If the EWC Line Still Droops
+
+In rough order of impact:
+
+1. **Try other `LAMBDA` values.** Move across ~2 orders of magnitude (e.g. 50, 150, 500, 1500, 5000) and keep the flattest, highest curve. Note that because penalties are summed per task, the effective constraint grows with the number of tasks — values from notebooks using a single accumulated Fisher will not transfer.
+2. **More capacity / longer training.** Raise `WIDTH` toward 2000 and `EPOCHS_PER_TASK` toward 40–100 (the paper's Figure 2B recipe).
+3. **Lower the learning rate** (e.g. 5e-4). With many summed penalties the loss surface gets stiff; a smaller step is more stable and avoids any need for gradient clipping.
+4. **More Fisher samples.** Raise `FISHER_SAMPLES` for a lower-variance importance estimate.
+5. **Average over seeds.** Run `train_ewc_sequence(LAMBDA, seed=...)` for a few seeds and average the snapshots; single-seed curves can dip noisily.
 
 ---
 
