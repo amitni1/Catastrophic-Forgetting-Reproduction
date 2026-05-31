@@ -136,12 +136,6 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 **What matched:** The key qualitative result is reproduced: low-% permutation (similar tasks) yields higher Fisher overlap in early layers (~0.75) compared to high-% permutation (~0.60). Both conditions converge to approximately the same overlap value (~0.50) by layer 3, reflecting the shared output representation of digit classification across all tasks. The convergence trend is clearly visible.
  
 **Differences:** Our absolute overlap values are slightly higher than in the paper across all layers, and the gap between the two conditions in early layers is somewhat smaller, consistent with using different specific permutation percentages. The layer-3 convergence point matches well (~0.50). The non-monotonic dip at layer 2 for the low-% condition (visible in our graph) is present but less prominent than in the original.
- 
----
- 
-### Overall Assessment
- 
-We successfully reproduced the **core qualitative findings** of Kirkpatrick et al. (2017): EWC substantially outperforms SGD in continual learning; Fisher overlap reflects task similarity; and shared output representations persist across dissimilar tasks. Quantitative differences in absolute accuracy levels (Fig 2B) are expected given architecture and hyperparameter differences, and do not undermine the validity of our replication. The most important result — **EWC remembers, SGD forgets** — is unmistakably clear across all three figures.
 
 ---
 ## Progress step 3
@@ -210,11 +204,6 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 **Differences:** In our replication, the low-% permutation line is extremely flat and high across all layers (~0.96–0.99), whereas the paper shows a more gradual decline in early layers before convergence. Our convergence is driven entirely by the high-% permutation curve rising, rather than both curves meeting in the middle as the paper implies. This may reflect differences in permutation block sizes (we use 8×8 vs 26×26), our empirical Fisher approximation vs the paper's exact Fisher, or differences in network architecture depth and width. Nonetheless, the convergence trend is clearly present and represents a meaningful reproduction of the paper's key result.
 
 ---
-
-## Overall Assessment
-
-We successfully reproduced the **core claim** of Kirkpatrick et al. (2017) — EWC substantially and consistently outperforms plain SGD in continual learning — across Fig 2A, Fig 2B, and Fig 2C. Our Fig 2C result is a particularly strong qualitative match, reproducing the layer-depth convergence pattern that we initially failed to capture in earlier versions. The main shortcoming across all figures is that our SGD baselines retain more accuracy than those in the paper, suggesting our permuted MNIST tasks share more structure than intended. The most important result — **EWC remembers, SGD forgets** — is unmistakably clear in our replication.
-
 ## Progress step 4:
 
 # Graph Comparison: Our Results vs. the Paper
