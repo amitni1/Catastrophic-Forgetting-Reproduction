@@ -43,23 +43,16 @@ But for your purposes, one notebook keeps things clean and readable.
 **AI:** Great question — this distinction trips a lot of people up. The **true Fisher** is computed using the model's own output distribution, which requires summing over all possible label vectors. In practice that's completely intractable. What we actually use is the **empirical Fisher**, where we compute gradients with respect to the ground-truth labels instead. It's a well-accepted approximation and works well in practice:
 
 ```python
-def compute_fisher(model, data_loader):
-    fisher_matrix = {}
-    for name, param in model.named_parameters():
-        fisher_matrix[name] = torch.zeros_like(param.data)
-
-    model.eval()
-    for data, target in data_loader:
-        model.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(F.log_softmax(output, dim=1), target)
-        loss.backward()
-
-        for name, param in model.named_parameters():
-            if param.grad is not None:
-                fisher_matrix[name] += param.grad.data ** 2 / len(data_loader)
-
-    return fisher_matrix
+def create_partial_permutation(size):
+    """Permute only a (size x size) square centred in the 28x28 image."""
+    perm = torch.arange(28 * 28)
+    grid = perm.view(28, 28).clone()
+    start = (28 - size) // 2
+    end   = start + size
+    region   = grid[start:end, start:end].flatten()
+    shuffled = region[torch.randperm(len(region))]
+    grid[start:end, start:end] = shuffled.view(size, size)
+    return grid.flatten()
 ```
 
 ---
