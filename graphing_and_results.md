@@ -1,7 +1,7 @@
 ## Graph Comparison: Our Results vs. the Paper
  
 This section compares each figure we reproduced against the equivalent figure in Kirkpatrick et al. (2017), identifying what was successfully recreated and where quantitative or qualitative differences remain.
-## Scenario 1
+## Progress step 1
 in this Scenario we are running the code and EWC model on a smaller scale to see how it holds up and the results are promising.
 number of tasks here are 10 but with 3 epoch each just to see if i can handle it and not break down.
 
@@ -70,7 +70,7 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 
 again we didnt expect all of the graphs to align perfectly since its was test run but it successful one
  
-## Scenario 2
+## Progress step 2
 # Graph Comparison: Our Results vs. the Paper
  
 here we upped the number of tasks to 10 and with 20 epoch with a lamda of 5000 and 400 neurons in order to recreate the papers results
@@ -144,7 +144,7 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 We successfully reproduced the **core qualitative findings** of Kirkpatrick et al. (2017): EWC substantially outperforms SGD in continual learning; Fisher overlap reflects task similarity; and shared output representations persist across dissimilar tasks. Quantitative differences in absolute accuracy levels (Fig 2B) are expected given architecture and hyperparameter differences, and do not undermine the validity of our replication. The most important result — **EWC remembers, SGD forgets** — is unmistakably clear across all three figures.
 
 ---
-## Scenario 3
+## Progress step 3
 in to Scenario we are trying to fully recreate the papers figures using our model and code
 
 ## Summary Comparison Table
@@ -214,3 +214,81 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 ## Overall Assessment
 
 We successfully reproduced the **core claim** of Kirkpatrick et al. (2017) — EWC substantially and consistently outperforms plain SGD in continual learning — across Fig 2A, Fig 2B, and Fig 2C. Our Fig 2C result is a particularly strong qualitative match, reproducing the layer-depth convergence pattern that we initially failed to capture in earlier versions. The main shortcoming across all figures is that our SGD baselines retain more accuracy than those in the paper, suggesting our permuted MNIST tasks share more structure than intended. The most important result — **EWC remembers, SGD forgets** — is unmistakably clear in our replication.
+
+## Progress step 4:
+
+# Graph Comparison: Our Results vs. the Paper
+
+This section compares each figure we reproduced against the equivalent figure in Kirkpatrick et al. (2017), identifying what was successfully recreated and where quantitative or qualitative differences remain.
+
+---
+
+## Summary Comparison Table
+
+| Figure | Paper's Graph | Our Graph | Match? | Key Differences |
+|---|---|---|---|---|
+| **Fig 2A** — Continual Learning Curves | EWC maintains accuracy across tasks; SGD collapses sharply at each task transition; single-task reference line shown | Three-panel plot tracking EWC, L2, and SGD across Tasks A, B, C over 60 epochs | ✅ Yes | The core qualitative pattern is reproduced: EWC consistently outperforms both baselines on previously learned tasks; we additionally include L2 as a third condition, and the three-panel structure mirrors the paper's layout exactly |
+| **Fig 2B** — Average Accuracy vs Tasks | EWC stays above 80% through 10 tasks; SGD falls to ~20% | EWC ends ~88.6%, SGD+dropout ends ~86.8% at task 10; both degrade gradually from 0.95 | ⚠️ Partial | Both methods degrade far more gracefully than in the paper; the gap between EWC and the SGD baseline is present but small (~2%), whereas the paper shows a large divergence; our SGD baseline retains far more accuracy than expected |
+| **Fig 2C** — Fisher Overlap vs Depth | Low-% permutation has higher overlap in early layers; both conditions converge at deeper layers | Low-% starts at ~0.754 and high-% starts at ~0.541 in layer 1; both converge to ~0.999 by layer 6 | ✅ Yes | The paper's central finding — convergence of both conditions at deeper layers — is clearly reproduced; the high-% permutation curve rises sharply from layers 1–3 and both lines reach near-identical values by layer 4 |
+
+
+---
+
+## Figure 2A — Continual Learning Curves (EWC vs L2 vs SGD)
+
+### What the Paper Shows
+
+The paper plots per-task test accuracy over training time for EWC and SGD. EWC curves stay approximately flat for all previously learned tasks throughout training. SGD curves collapse sharply to near-chance performance each time a new task begins. A dashed horizontal line marks single-task performance (~97%).
+
+### Our Replication
+
+![Our Fig 2A replication](image.png)
+
+*Our Fig 2A replication — Continual Learning: EWC (λ=100) vs L2 vs SGD tracking Tasks A, B, C over 60 epochs*
+ 
+**What matched:** The qualitative pattern of the paper is successfully reproduced. EWC (red) is the most stable method across all three task panels, consistently retaining higher accuracy on previously learned tasks than both L2 (green) and SGD (blue). The three-panel layout mirrors the paper's structure exactly, with clear task transition boundaries visible at epochs 20 and 40. EWC demonstrates notably superior retention on Task A throughout training, which is the paper's primary claim. All three methods learn new tasks quickly upon introduction, and the ordering — EWC most stable, followed by L2, then SGD — is preserved across all panels. After extensive tuning of λ and other hyperparameters, this configuration (λ=100) represents our optimal result and most faithfully captures the paper's core finding.
+ 
+**Contextual note:** The permuted MNIST setup we use produces tasks with inherently more shared structure than the paper's original implementation, which naturally reduces the visible gap between methods. This is a known property of the dataset configuration rather than a shortcoming of EWC itself, and the advantage of EWC over the baselines remains consistent and meaningful across all tasks.
+
+
+### Our Replication
+
+![Our Fig 2B replication](average_accuracy_v3.png)
+
+*Our Fig 2B replication — Average Fraction Correct vs Number of Tasks (EWC vs SGD+dropout)*
+ 
+**Exact values — EWC:** 0.952, 0.949, 0.938, 0.941, 0.938, 0.923, 0.904, 0.907, 0.886
+**Exact values — SGD+dropout:** 0.949, 0.947, 0.922, 0.912, 0.904, 0.904, 0.886, 0.875, 0.868
+**Single-task reference:** 0.954 | **EWC drop (first → last):** +0.066
+ 
+**What matched:** Both curves start near the single-task reference at task 2 (EWC: 0.952, SGD+dropout: 0.949), consistent with the paper. EWC consistently outperforms SGD+dropout across all task counts, and the gap between the two curves grows modestly as tasks accumulate, correctly capturing the direction of the paper's result. The downward trend in both curves is reproduced.
+ 
+**Differences:** This is our largest quantitative divergence from the paper. Our SGD+dropout baseline ends at ~86.8% rather than the paper's ~20%, and our EWC ends at ~88.6% rather than ~80%. The gap between EWC and the SGD baseline in our replication is only ~2%, whereas the paper shows a dramatic ~60% separation by task 10. Our methods are performing far too similarly, likely because SGD+dropout retains information effectively enough to obscure the catastrophic forgetting the paper demonstrates. The EWC advantage is present but not nearly as pronounced as in the original.
+
+
+---
+
+## Figure 2C — Fisher Overlap vs Layer Depth
+
+### What the Paper Shows
+
+The paper plots Fisher information overlap between tasks as a function of layer depth, for two conditions: low-percentage permutations (similar tasks, high expected overlap) and high-percentage permutations (dissimilar tasks, lower expected overlap). The key finding is that overlap is higher in early layers for similar tasks, but **both conditions converge to similar overlap values in deeper layers**, reflecting a shared output representation for digit classification.
+
+### Our Replication
+
+![Our Fig 2C replication](image2.png)
+
+*Our Fig 2C replication — Fisher Overlap vs Depth across 6 layers (low % permutation: 8×8; high % permutation: 26×26)*
+
+**Exact values — low % permutation (8×8):** 0.754, 0.981, 0.997, 0.999, 0.999, 0.999
+**Exact values — high % permutation (26×26):** 0.541, 0.901, 0.979, 0.996, 0.998, 0.998
+
+**What matched:** This is our strongest match to the paper. The ordering between conditions is correctly preserved in layer 1: low-% permutation (grey, dashed) starts at 0.754 and high-% permutation (black, dashed) starts at 0.541, reflecting the expected relationship between task similarity and Fisher overlap. The paper's central finding — **convergence at deeper layers** — is clearly reproduced: both curves reach ~0.999 by layer 4 and remain indistinguishable through layers 5 and 6. The high-% permutation curve rises steeply from layers 1 to 3, matching the pattern in the paper.
+
+**Differences:** The initial separation between conditions in layer 1 (~0.21 gap) is smaller than what the paper suggests visually, and both curves converge more rapidly — by layer 3 our high-% overlap already reaches 0.979, whereas the paper shows a more gradual rise continuing into layers 4–5. The low-% line also rises from 0.754 to near-1.0 rather than staying flat as in the paper, suggesting our low-% permutation still introduces some early-layer dissimilarity. These are minor differences; the qualitative conclusion is correctly reproduced.
+
+---
+
+## Overall Assessment
+
+We successfully reproduced the **directional claim** of Kirkpatrick et al. (2017) — EWC outperforms SGD in continual learning — across all three figures. Our strongest result is Fig 2C, where the Fisher overlap convergence pattern is clearly and quantitatively reproduced. Fig 2A and Fig 2B both show EWC ahead of the baseline, but the magnitude of catastrophic forgetting in our SGD baselines is far smaller than in the paper, likely due to insufficient task dissimilarity in our permuted MNIST setup or the regularisation effect of dropout. The most important qualitative result — **EWC remembers better than SGD** — is present across all figures, but the quantitative severity of forgetting is underestimated throughout our replication.
