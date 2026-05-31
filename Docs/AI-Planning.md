@@ -77,13 +77,15 @@ We ended up going with `λ = 1000`, which we found through trial and error. The 
 **AI:** The good news is that EWC extends naturally to multiple tasks. You just accumulate a separate penalty term for each previously seen task and sum them all together. Since each term is quadratic, the sum is still a valid quadratic penalty — the paper actually mentions this. Here's what that looks like in code:
 
 ```python
-def ewc_penalty(model, fisher_matrices, opt_weights):
-    penalty = 0
-    for task_id in fisher_matrices:
-        for name, param in model.named_parameters():
-            fisher = fisher_matrices[task_id][name]
-            opt_w = opt_weights[task_id][name]
-            penalty += (fisher * (param - opt_w) ** 2).sum()
+def ewc_penalty_multi(model, ewc_tasks, normalize=True):
+    penalty = 0.0
+    for task in ewc_tasks:
+        fisher = task['fisher']
+        anchor = task['anchor']
+        for n, p in model.named_parameters():
+            penalty += (fisher[n] * (p - anchor[n]) ** 2).sum()
+    if normalize and len(ewc_tasks) > 0:
+        penalty = penalty / len(ewc_tasks)
     return penalty
 ```
 
