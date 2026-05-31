@@ -13,7 +13,7 @@ this project is part of a submission for a course in python by students: Amit Ni
 - [Background](#background)
 - [Project Overview](#project-overview)
 - [Architecture & Parameters](#architecture--parameters)
-- [Results & Evaluation](#Results--and--Graphs)
+- [Results & Evaluation](#Results-and-Graphs)
 ---
 ## Academic documentation
 Based on the need to document every step we took to achieve our results.
