@@ -71,6 +71,7 @@ SEED             = 0
 | `LR` | 1e-3 | Learning rate. Lower to 5e-4 if the run diverges (avoids needing gradient clipping). |
 | `LAMBDA` | 100 | EWC penalty strength. Lambda and Fisher scale are coupled; old-notebook values do **not** transfer. Try values across ~2 orders of magnitude. |
 | `FISHER_SAMPLES` | 2048 | Number of examples used to estimate the Fisher. Higher = lower variance, slower. |
+| `NORMALIZE_PENALTY` | True | Divides the summed EWC penalty by the number of prior tasks. Keeps total penalty magnitude stable as tasks accumulate, making lambda tuning more consistent. Currently fixed to `True` in `train_ewc_sequence`. |
 | `L2_LAMBDA` | 1.0 | Uniform quadratic penalty strength for the L2 baseline. |
 | `EARLY_STOP_PATIENCE` | 5 | Steps of non-improving validation accuracy before the dropout baseline stops training on a task. |
 
@@ -399,26 +400,30 @@ def train_baselines(width=WIDTH, epochs=EPOCHS_PER_TASK, lr=LR,
         best_val = -1.0; best_state = copy.deepcopy(m_drop.state_dict()); no_improve = 0; stopped = False
 
         for epoch in range(epochs):
-            # SGD: pure cross-entropy, no memory
-            o_sgd.zero_grad()
-            F.cross_entropy(m_sgd(data), target).backward()
-            o_sgd.step()
+            m_sgd.train(); m_l2.train(); m_drop.train()
+            for data, target in train_loader:
+                data, target = data.to(device), target.to(device)
 
-            # L2: cross-entropy + uniform quadratic penalty from task anchor
-            o_l2.zero_grad()
-            loss_l2 = F.cross_entropy(m_l2(data), target)
-            if l2_anchor is not None:
-                pen = sum(((p - l2_anchor[n]) ** 2).sum() for n, p in m_l2.named_parameters())
-                loss_l2 = loss_l2 + (l2_lambda / 2.0) * pen
-            loss_l2.backward(); o_l2.step()
+                # SGD: pure cross-entropy, no memory
+                o_sgd.zero_grad()
+                F.cross_entropy(m_sgd(data), target).backward()
+                o_sgd.step()
 
-            # Dropout: early stopping once val accuracy stops improving
-            if not stopped:
-                o_drop.zero_grad()
-                F.cross_entropy(m_drop(data), target).backward()
-                o_drop.step()
+                # L2: cross-entropy + uniform quadratic penalty from task anchor
+                o_l2.zero_grad()
+                loss_l2 = F.cross_entropy(m_l2(data), target)
+                if l2_anchor is not None:
+                    pen = sum(((p - l2_anchor[n]) ** 2).sum() for n, p in m_l2.named_parameters())
+                    loss_l2 = loss_l2 + (l2_lambda / 2.0) * pen
+                loss_l2.backward(); o_l2.step()
 
-            # Early stopping check for dropout model
+                # Dropout: train if not early-stopped
+                if not stopped:
+                    o_drop.zero_grad()
+                    F.cross_entropy(m_drop(data), target).backward()
+                    o_drop.step()
+
+            # Early stopping check — runs once per epoch, after all batches complete
             if not stopped:
                 val_avg = avg_val_acc(m_drop, val_loaders)
                 if val_avg > best_val:
@@ -444,7 +449,7 @@ def train_baselines(width=WIDTH, epochs=EPOCHS_PER_TASK, lr=LR,
 
 **L2 anchor logic:** After each task, the current weights of `m_l2` are saved as `l2_anchor`. On the next task, the L2 penalty pulls weights back toward this anchor. This is the standard L2 continual learning baseline — unlike EWC, it cannot selectively weight the penalty by parameter importance.
 
-**Dropout early stopping:** At the end of each epoch, `avg_val_acc` is computed over the validation loaders for all tasks seen so far. If it fails to improve for `EARLY_STOP_PATIENCE` consecutive epochs, training on the current task stops and the best-seen weights are restored. This is the paper's stopping criterion for the SGD+dropout baseline.
+**Dropout early stopping:** After all batches in an epoch complete, `avg_val_acc` is computed over the validation loaders for all tasks seen so far. If it fails to improve for `EARLY_STOP_PATIENCE` consecutive epochs, training on the current task stops and the best-seen weights are restored. This is the paper's stopping criterion for the SGD+dropout baseline.
 
 ---
 
@@ -557,7 +562,7 @@ def train_sequential(loader_A, loader_B, epochs=FIG2C_EPOCHS):
     return fisher_A, fisher_B
 ```
 
-Two separate `NetDeep` models are trained sequentially — one for the low-permutation pair (base → 8×8) and one for the high-permutation pair (base → 26×26). Each model is trained for **100 epochs per task** so Fisher distributions can specialize. Fisher is computed over 8192 samples for low variance.
+`train_sequential` trains a **single** `NetDeep` model sequentially — first on task A, then on task B — and returns both Fisher matrices. It is called twice: once for the low-permutation pair (base → 8×8) and once for the high-permutation pair (base → 26×26). Each model is trained for **100 epochs per task** so Fisher distributions can specialize. Fisher is computed over 8192 samples for low variance.
 
 ### The Overlap Metric (Globally Normalized Hellinger Distance)
 
@@ -599,9 +604,9 @@ Overlap = 1 means the two tasks rely on identical parameters; Overlap = 0 means 
 
 The final plot — **Fisher Overlap vs. Layer Depth** — reveals two key insights from the original EWC paper:
 
-1. **High-permutation tasks** (26×26, very different from MNIST) show *low overlap* across all layers — the tasks use different parameters throughout the network
-2. **Low-permutation tasks** (8×8, similar to MNIST) show *higher overlap* — the tasks share important parameters
-3. **Overlap tends to vary with layer depth.** Earlier layers learn low-level features shared across tasks; deeper layers specialize per-task, causing their Fisher distributions to diverge. This is why EWC must protect weights *selectively* — the Fisher matrix acts as a precision mask that adapts to the degree of task-specificity at each layer.
+1. **High-permutation tasks** (26×26, very different from MNIST) show *low overlap* in early layers — the tasks use different parameters to process very different input distributions
+2. **Low-permutation tasks** (8×8, similar to MNIST) show *higher overlap* throughout — the tasks share important parameters across the network
+3. **Overlap tends to increase toward the output layers.** Even for high-permutation tasks, layers closer to the output are *reused* across tasks — because the output domain (class labels 0–9) is shared regardless of how different the inputs are. This is why EWC must protect weights *selectively* — the Fisher matrix captures which weights are genuinely task-specific versus shared.
 
 ---
 
