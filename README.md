@@ -50,15 +50,15 @@ Three models are compared throughout the sequence:
 1. **SGD**: A baseline network trained with standard Stochastic Gradient Descent, with no mechanism to protect prior tasks.
 2. **L2**: A uniform quadratic regularization baseline that penalizes all weight changes equally (no Fisher-based weighting).
 3. **EWC**: A network trained with the paper-exact EWC penalty. After each task its Fisher matrix and weight anchor are stored and summed into the penalty for all future tasks.
-A separate **single-task reference model** is trained only on Task 1 and used as the performance ceiling (the dashed line in Figure 2B).
+A separate **single-task reference model** is trained only on Task 1 and used as the performance ceiling (the dashed line in Figure B).
  
-For Figure 2B, the SGD baseline is replaced with a **SGD + dropout** variant, which uses dropout regularization (0.2 on input, 0.5 on hidden layers) and per-task early stopping based on held-out validation accuracy.
+For Figure B, the SGD baseline is replaced with a **SGD + dropout** variant, which uses dropout regularization (0.2 on input, 0.5 on hidden layers) and per-task early stopping based on held-out validation accuracy.
  
 ---
  
 ## Architecture & Parameters
  
-### Neural Network Structure (Figures 2A & 2B)
+### Neural Network Structure (Figures A & B)
 A Multi-Layer Perceptron (MLP) with configurable hidden width:
 - **Input Layer**: $28 \times 28 = 784$ neurons (flattened MNIST image).
 - **Hidden Layer 1**: 2000 neurons (ReLU activation).
@@ -66,13 +66,13 @@ A Multi-Layer Perceptron (MLP) with configurable hidden width:
 - **Output Layer**: 10 neurons (cross-entropy loss, digits 0–9).
 The dropout baseline uses the same architecture with an additional input dropout layer (0.2) and hidden dropout layers (0.5).
  
-### Neural Network Structure (Figure 2C only)
+### Neural Network Structure (Figure C only)
 A deeper MLP used solely for the Fisher overlap experiment:
 - **6 hidden layers** of 100 neurons each (ReLU activation).
 - **Output layer**: 10 neurons.
 ### Hyperparameters
 - **Number of tasks**: 10
-- **Epochs per task**: 20 (paper used up to 100 for Fig 2B)
+- **Epochs per task**: 20 (paper used up to 100 for Fig B)
 - **Learning Rate**: 0.001
 - **Momentum**: 0.9 (SGD)
 - **Batch size**: 256
