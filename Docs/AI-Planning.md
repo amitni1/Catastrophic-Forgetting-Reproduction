@@ -18,6 +18,8 @@ The EWC loss function:
 
 $$\mathcal{L}(\theta) = \mathcal{L}_B(\theta) + \sum_i \frac{\lambda}{2} F_i (\theta_i - \theta^*_{A,i})^2$$
 
+> **Scope note:** This replication covers the MNIST experiments from the paper (Figures 2A, 2B, and 2C). The Atari reinforcement learning experiments were not replicated.
+
 ---
 
 ## Development Q&A
@@ -40,19 +42,40 @@ But for your purposes, one notebook keeps things clean and readable.
 
 **Us:** We've seen references to both "empirical Fisher" and "true Fisher." What's the difference, and which one should we use?
 
-**AI:** Great question — this distinction trips a lot of people up. The **true Fisher** is computed using the model's own output distribution, which requires summing over all possible label vectors. In practice that's completely intractable. What we actually use is the **empirical Fisher**, where we compute gradients with respect to the ground-truth labels instead. It's a well-accepted approximation and works well in practice:
+**AI:** This distinction matters more than it might seem. The **empirical Fisher** computes gradients with respect to the ground-truth labels — it's a common shortcut, but it introduces a systematic under-estimation bias because it averages gradients over a batch, diluting the per-sample signal.
+
+The **true Fisher** instead samples the label from the model's own predictive distribution and processes one example at a time, so each gradient squared is a genuine per-sample contribution. This is what the paper's Laplace approximation actually requires, and it's what we use. Earlier versions of our code used the batch-averaged empirical Fisher, and the result was a noticeably weaker penalty that caused Fig 2B to collapse — fixing this was one of the key corrections in our final implementation:
 
 ```python
-def create_partial_permutation(size):
-    """Permute only a (size x size) square centred in the 28x28 image."""
-    perm = torch.arange(28 * 28)
-    grid = perm.view(28, 28).clone()
-    start = (28 - size) // 2
-    end   = start + size
-    region   = grid[start:end, start:end].flatten()
-    shuffled = region[torch.randperm(len(region))]
-    grid[start:end, start:end] = shuffled.view(size, size)
-    return grid.flatten()
+def compute_fisher(model, data_loader, num_samples=1024):
+    """True diagonal Fisher: E[(d log p / d theta)^2], estimated per-sample."""
+    fisher = {n: torch.zeros_like(p) for n, p in model.named_parameters()}
+    model.eval()
+    seen = 0
+    for data, _ in data_loader:
+        data = data.to(device)
+        for x in data:
+            if seen >= num_samples:
+                break
+            x = x.unsqueeze(0)
+            model.zero_grad()
+            logits = model(x)
+            log_p  = F.log_softmax(logits, dim=1)
+            p      = F.softmax(logits, dim=1).clamp_min(1e-8)
+            p      = p / p.sum(dim=1, keepdim=True)
+            y      = torch.multinomial(p, 1).squeeze(1)   # sample from model's own distribution
+            loss   = F.nll_loss(log_p, y)
+            loss.backward()
+            for n, par in model.named_parameters():
+                if par.grad is not None:
+                    fisher[n] += par.grad.detach() ** 2
+            seen += 1
+        if seen >= num_samples:
+            break
+    for n in fisher:
+        fisher[n] /= max(seen, 1)
+    model.zero_grad()
+    return fisher
 ```
 
 ---
@@ -66,7 +89,7 @@ def create_partial_permutation(size):
 - **λ too small** → the regularization isn't strong enough → the model still forgets
 - **λ too large** → the model is too rigid → it can't learn new tasks properly
 
-We ended up going with `λ = 1000`, which we found through trial and error. The values in the original paper don't directly transfer because they used a different network scale and optimizer configuration.
+We ended up going with `λ = 100`, which we found through trial and error. The values in the original paper don't directly transfer because they used a different network scale and optimizer configuration.
 
 ---
 
@@ -130,7 +153,15 @@ With EWC, the penalty term changes that. Weights that were critical for task A (
 
 ---
 
+### Q7: Why do you normalize the EWC penalty by the number of tasks?
 
+**Us:** We noticed the penalty is divided by the number of completed tasks. The paper doesn't mention this — why did you add it?
+
+**AI:** This is a practical adjustment we made to work around a compute limitation. In principle, the right approach is to tune λ specifically for 10 tasks, since the raw summed penalty grows as tasks accumulate — a λ that works well after 2 tasks will over-constrain the network by task 9 or 10. Properly finding that λ would require running the full 10-task sequence multiple times at 20–100 epochs per task, which was beyond our available resources.
+
+Dividing the penalty by the number of tasks keeps its magnitude roughly stable across the sequence, which means the λ we tuned on shorter runs stays reasonable all the way through. It's not what the paper does, but it made our results significantly more consistent without requiring additional compute.
+
+---
 
 ## References
 
