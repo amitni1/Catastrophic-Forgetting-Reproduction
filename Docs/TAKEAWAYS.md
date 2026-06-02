@@ -9,124 +9,136 @@
 
 ### 1. Continual Learning is Not Trivial
 
-Before this project, We assumed neural networks could naturally learn multiple tasks sequentially — just like humans do. The reality shocked me: **plain SGD completely forgets previous tasks within minutes of training on something new.** Watching the accuracy graphs collapse was eye-opening. It made us realize that "learning" in neural networks is fundamentally different from human learning — it's pure optimization, with no intrinsic memory mechanism.
+Before this project, we assumed neural networks could naturally learn multiple tasks sequentially — much like humans do. The reality was sobering: **plain SGD almost completely forgets previous tasks within minutes of training on something new.** Watching the accuracy curves for an earlier task collapse the moment training moved on was eye-opening. It made us realize that "learning" in a neural network is fundamentally different from human learning — it is pure optimization for the current objective, with no intrinsic mechanism for preserving past solutions.
 
-### 2. The Fisher Information Matrix is simples yet complex
+### 2. The Fisher Information Matrix is Simple to Compute, Deep in Meaning
 
-The Fisher matrix is elegant because it answers a simple question: *"How much does the loss care about each weight?"* Computing it from gradients is straightforward, but the insight is profound — weights with high Fisher values are critical to performance, while low-Fisher weights are essentially "free real estate" for new tasks. This gives EWC surgical precision: protect what matters, leave the rest flexible.
+The Fisher matrix is elegant because it answers a simple question: *"How much does the model's output care about each weight?"* Computing the diagonal from gradients is straightforward, but the insight is profound — weights with high Fisher values are critical to performance on a task, while low-Fisher weights are essentially free capacity that new tasks can repurpose. This is what gives EWC its surgical precision: protect what matters, leave the rest flexible.
+
+The deeper lesson was understanding *which* Fisher to compute. We started with the obvious version and only later understood why it was the wrong one — that journey is described under Challenges below, and it turned out to be the single most important thing we learned in the whole project.
 
 ### 3. Theory Meets Practice — and They Don't Always Match
 
 The paper makes EWC sound simple: compute Fisher, add a penalty, done. In practice:
-- **λ tuning is trial and error.** The paper's values didn't work for my architecture. I spent hours tweaking λ from 10 to 10,000.
-- **Fisher values can be tiny.** We had to debug why our penalty wasn't activating — turns out the Fisher values were in the 1e-6 range, so λ=10 was useless.
-- **Memory management matters.** Storing Fisher matrices and optimal weights for 10 tasks on GPU required careful planning.
+- **λ tuning is coupled to the Fisher scale.** The paper's values did not transfer to our setup, and — as we learned the hard way — neither did our *own* λ values once we changed how the Fisher was computed. λ and the Fisher magnitude are coupled, so changing one silently invalidates the other.
+- **The penalty can quietly fail to activate.** Early on our penalty was effectively zero, and the model behaved exactly like plain SGD. Nothing errored; the regularization was simply too weak to matter.
+- **Memory management matters.** Storing a separate Fisher matrix and weight anchor for each of 10 tasks on the GPU required deliberate planning, since the penalty list grows with every task.
 
 ### 4. SGD is Aggressively Forgetful
 
-We expected gradual degradation. What we saw was **catastrophic collapse** — Task 1 accuracy dropped from 95% to 15% after training on Task 2 for just one epoch. This wasn't gentle forgetting; it was a hard reset. It made us appreciate why continual learning is considered an open problem.
+We expected gradual degradation. What we saw was **catastrophic collapse** — an earlier task's accuracy fell from the mid-nineties toward chance level after only a short spell of training on the next task. This was not gentle forgetting; it was closer to a hard reset. It made us appreciate why continual learning is still considered an open problem rather than a solved one.
 
-### 5. Partial Permutations are Genius
+### 5. Partial Permutations are a Clever Experimental Device
 
-Figure C in the paper (Fisher overlap by layer depth) requires tasks with controlled similarity. The solution — partial permutations that only shuffle the center of the image. An 8×8 permutation keeps tasks similar (high Fisher overlap), while a 26×26 permutation makes them dissimilar (low overlap in early layers). This design trick made the graph interpretable.
+Figure 2C in the paper (Fisher overlap by layer depth) requires task pairs with *controlled* similarity. The device that makes this possible is the partial permutation: shuffle only a square region in the centre of the image. An 8×8 permutation changes only a small patch, so the two tasks stay similar and their Fisher matrices overlap strongly. A 26×26 permutation scrambles most of the image, so the tasks become dissimilar and their early-layer Fishers overlap very little. This single trick turns "task similarity" from a vague notion into a knob we can dial, which is what makes the overlap graph interpretable.
 
 ---
 
 ## Challenges We Faced
 
-### Challenge 1: Understanding the Fisher Computation
+### Challenge 1: Understanding the Fisher Computation — and Getting it Wrong First
 
-**The Problem:** The paper uses "Fisher Information Matrix" without explaining *how* to compute it in practice. We initially thought we needed second derivatives (Hessian), which would be computationally infeasible.
+**The Problem:** The paper refers to the "Fisher Information Matrix" without spelling out *how* to compute it in practice. We initially thought we needed second derivatives (the Hessian), which would have been computationally infeasible for a network of this size.
 
-**The Resolution:** We learned about the **empirical Fisher approximation** — you can compute it using only first-order gradients on the ground-truth labels:
+**The First (Wrong) Resolution — the empirical Fisher:** We learned that the diagonal Fisher can be approximated using only first-order gradients, and our first implementation did the obvious thing: take the loss on the *ground-truth* labels, square the gradients, and average them over a batch.
 
 ```python
+# Early version — empirical Fisher on ground-truth labels, batch-averaged
+loss = F.cross_entropy(model(batch), targets)
 loss.backward()
-fisher += grad ** 2
+fisher += grad ** 2     # squared AFTER batch averaging — this is the bug
 ```
 
-But understanding *why* this works required reading about the connection between Fisher and the Hessian at a local minimum.
+This ran without error and looked reasonable, but it produced a noticeably weak penalty, and the average accuracy in Figure 2B sagged toward ~0.8 no matter how we tuned λ.
+
+**Understanding why it was wrong:** The Fisher we actually want is `E[(∂ log p(y|x,θ) / ∂θ)²]`, where the expectation over `y` is taken under the **model's own predictive distribution**, estimated one example at a time. Two things were wrong with our first version. First, it conditioned on the empirical (ground-truth) labels rather than sampling labels from the model — so it was the *empirical* Fisher, not the true Fisher the Laplace approximation calls for. Second, and more subtly, averaging gradients across a batch before squaring under-estimates curvature, because `E[g]² ≠ E[g²]` — batching washes out the per-sample signal that the Fisher is supposed to capture.
+
+**The Real Fix — the true per-sample Fisher:** We rewrote the estimator to process one example at a time and to sample the label from the model's own softmax output:
+
+```python
+log_p = F.log_softmax(logits, dim=1)
+p     = F.softmax(logits, dim=1)
+y     = torch.multinomial(p, 1).squeeze(1)   # sample from the model's distribution
+F.nll_loss(log_p, y).backward()
+fisher[n] += par.grad.detach() ** 2          # square per sample, then average
+```
+
+This was the turning point of the project. The penalty became meaningful, and Figure 2B stopped collapsing. The lesson generalizes well beyond EWC: a quantity can be "computed correctly" in the sense of running without error while still being the wrong quantity, and the only way to catch that is to understand what the math is actually asking for.
 
 ### Challenge 2: Graphs Not Showing Catastrophic Forgetting
 
-**The Problem:** Our first implementation showed SGD and EWC performing identically — both maintained high accuracy. we didnt understand : where's the catastrophic forgetting?
+**The Problem:** Our first end-to-end run showed SGD and EWC performing almost identically — both held high accuracy on every task. The obvious question was: where is the catastrophic forgetting we came to study?
 
-**The Root Cause:** We was accidentally evaluating on the *training set* of each task, not the *test set*. The model had memorized the data, so it looked like it "remembered" previous tasks.
+**The Root Cause:** We were accidentally evaluating on each task's *training* set rather than its *test* set. The network had effectively memorized the training data, so it looked as though it "remembered" earlier tasks.
 
-**The Fix:** Separate train/test splits for each task, and evaluate strictly on test data during the accuracy tracking loop.
+**The Fix:** Strict train / validation / test separation per task, and evaluation exclusively on held-out test data in the accuracy-tracking loop. With clean evaluation, the forgetting reappeared immediately — a useful reminder that an encouraging-looking graph is not the same as a correct one.
 
-### Challenge 3: EWC Penalty Not Activating
+### Challenge 3: The EWC Penalty Not Activating
 
-**The Problem:** EWC was performing the same as SGD. We added print statements and saw the penalty term was effectively zero.
+**The Problem:** In the empirical-Fisher era (before Challenge 1's real fix), EWC performed the same as plain SGD. Print statements showed the penalty term was effectively zero.
 
-**The Root Cause:** My Fisher values were in the range [1e-8, 1e-6], and we were using λ=10. The penalty was `10 * 1e-6 * (weight_change)^2 ≈ 1e-5`, which was negligible compared to the classification loss (~2.3).
+**The Root Cause:** The under-estimated Fisher values were extremely small, so for any λ we were willing to try, the penalty `(λ/2)·F·Δθ²` was negligible next to the classification loss. We were tempted to compensate by pushing λ very high (into the thousands), and that did force the penalty to register — but it was treating the symptom. The genuine cause was the Fisher estimate itself, which Challenge 1 ultimately fixed.
 
-**The Fix:** Increased λ to 1000. The penalty became significant enough to constrain the weights.
+**The Fix:** Once the true per-sample Fisher was in place, the Fisher magnitudes were on a sensible scale and a far more moderate λ did the job. This is why our final configuration uses **λ = 100** rather than the inflated value the broken estimator seemed to demand — and why the notebook warns that λ values do not transfer between Fisher formulations.
 
 ### Challenge 4: Extending EWC to 10 Tasks
 
-**The Problem:** The paper's formula describes two tasks (A and B). we needed to handle 10 tasks, and we were sure if we should:
-- Sum all penalties together, or
-- Use only the most recent task's penalty, or
-- Use some weighted combination
+**The Problem:** The paper's formula is written for two tasks (A and B). We needed to handle 10, and we were not sure whether to sum all penalties, keep only the most recent task's penalty, or use some weighted combination.
 
-**The Resolution:** The paper mentions in passing that "the sum of quadratic penalties is itself a quadratic penalty." This means you just sum them. Simple in hindsight, but not obvious at first.
+**The Resolution:** The paper notes in passing that the sum of quadratic penalties is itself a quadratic penalty, so the principled choice is to keep a *separate* Fisher and anchor for each completed task and add their penalties together. In our final implementation we go one step further and **average** the per-task penalties (divide by the number of stored tasks) so that the total constraint stays on a comparable scale as tasks accumulate, instead of growing with every new task. This kept a single tuned λ usable across the whole 10-task sequence.
 
 ---
 
 ## Key Insights
 
-### Insight 1: EWC is a Bayesian Trick
+### Insight 1: EWC is an Approximate Bayesian Update
 
-EWC isn't just a regularization technique — it's an approximation of Bayesian posterior updates. The penalty term represents the prior from previous tasks: `p(θ | D_A)`. When learning task B, you're computing `p(θ | D_B, D_A)` without needing to store D_A. This connection to Bayesian inference made the algorithm click for me conceptually.
+The insight that made everything click is that EWC is not merely a regularization heuristic — it is an approximation to a Bayesian posterior update. After learning task A, the posterior over weights `p(θ | D_A)` is approximated by a Gaussian centred at the task-A solution `θ*_A`, with precision (inverse covariance) given by the Fisher. Learning task B then approximates `p(θ | D_A, D_B)` without ever revisiting `D_A`: the cross-entropy on B plays the role of the new likelihood, and the quadratic Fisher penalty *is* the negative log of that Gaussian prior.
 
-### Insight 2: Shared Representations Emerge Naturally
+This single framing explains the two design choices that otherwise look arbitrary. The penalty is **quadratic** because a Gaussian log-density is quadratic in `θ`. It is **Fisher-weighted** because the Fisher is exactly the precision of that Gaussian — directions the posterior is confident about (high Fisher) are penalized heavily, while directions it is uncertain about (low Fisher) are left free. Seen this way, the diagonal Fisher is a deliberate, tractable simplification: we are approximating a full posterior covariance by its diagonal, trading some fidelity for the ability to actually run the method.
 
-Figure C shows that dissimilar tasks (26×26 permutation) still share weights in the final layers. Why? Because the *output space is the same* — all tasks classify digits 0-9. The early layers learn task-specific features (edges, textures), but the final layers learn shared concepts (digit identity). EWC allows this naturally because only the task-specific weights have high Fisher values; the shared weights are reused freely.
+### Insight 2: Shared Representations Emerge Where the Tasks Genuinely Overlap
+
+Our Figure 2C result is, in our view, the most informative part of the project. Using the globally normalized Fisher overlap, even the *dissimilar* (26×26) task pair shows overlap that **rises toward the output layers**, while the early layers — the ones processing the scrambled pixels — overlap very little. The similar (8×8) pair overlaps strongly throughout.
+
+The reason is that the output space is shared across every task: all of them ultimately classify digits 0–9. The early layers must adapt to whatever pixel arrangement a task presents, so for dissimilar tasks they specialize and diverge; the later layers operate on a more abstract, task-independent notion of class identity and can be reused. This is precisely why EWC must protect weights *selectively* rather than uniformly: a uniform penalty (like the L2 baseline) cannot tell a genuinely shared output-layer weight from an early-layer weight that one task needs and another does not, whereas the Fisher can.
 
 ### Insight 3: Catastrophic Forgetting is About Interference, Not Capacity
 
-We initially thought forgetting happened because the network "ran out of space." But a 6-layer, 400-unit network has ~700,000 parameters — way more than needed for 10 permuted MNIST tasks. The problem isn't capacity; it's **gradient interference**. Task B's gradients destructively interfere with Task A's solution. EWC resolves this by creating a "no-go zone" around Task A's weights.
+We initially suspected forgetting happened because the network "ran out of room." The Fisher analysis showed this is the wrong mental model. Our networks have far more parameters than are strictly needed for 10 permuted-MNIST tasks, yet they still forget aggressively. The problem is not capacity but **gradient interference**: when training on task B, the gradients are computed solely from task B's loss and freely overwrite the configuration that solved task A, because nothing in plain SGD's objective references task A at all. EWC addresses the interference directly — it adds curvature to the loss landscape around the weights that mattered for previous tasks, so the optimizer is steered toward a solution for B that does not destroy A, rather than relying on having spare parameters lying around.
 
-### Insight 4: Lambda is Problem-Specific
+### Insight 4: λ is Coupled to the Fisher Scale, Not a Universal Constant
 
-The paper doesn't give a formula for λ — it's a hyperparameter you tune. I found:
-- **λ < 100:** Too weak, forgetting still occurs.
-- **λ = 1000:** Sweet spot for my architecture.
-- **λ > 5000:** Too rigid, new tasks don't learn well.
-
-This taught us that EWC isn't a plug-and-play solution; it requires careful tuning for each problem.
+The paper gives no formula for λ, and our experience showed *why* one cannot exist in absolute terms: λ is only meaningful relative to the magnitude of the Fisher it multiplies. The same numerical λ behaves completely differently under a batch-averaged empirical Fisher (tiny values, penalty vanishes) versus a true per-sample Fisher (sensible values, moderate λ suffices). This is the real reason our usable λ moved from the thousands down to 100 once the estimator was corrected — not because the "right" number changed, but because the Fisher's scale did. The practical takeaway is to re-tune λ from scratch, across roughly two orders of magnitude, whenever anything about the Fisher computation changes, and to treat any λ value as inseparable from the estimator that produced it.
 
 ---
 
 ## What We Would Do Differently
 
-1. **Start simpler:** We began with 10 tasks immediately. we should have validated the 2-task case first (SGD forgets, EWC remembers), then scaled up.
+1. **Start simpler.** We jumped straight to 10 tasks. We should have validated the clean 2-task case first (SGD forgets, EWC remembers) before scaling up, which would have surfaced the evaluation bug and the Fisher-scale problem far sooner.
 
-2. **Log more metrics:** we only tracked accuracy. we should have logged:
-   - Fisher matrix statistics (mean, max, min per layer)
-   - EWC penalty magnitude over time
-   - Per-task loss (not just accuracy)
+2. **Log more than accuracy.** We mostly tracked accuracy. We should also have logged Fisher statistics per layer (mean / max / min), the EWC penalty magnitude over time, and per-task loss. Had we watched the penalty magnitude from the start, the "penalty is effectively zero" problem would have been obvious immediately rather than after a round of debugging.
 
-3. **Experiment with Fisher variants:** The paper mentions other Fisher approximations (e.g., using the model's predicted distribution instead of ground truth). I stuck with the empirical Fisher, but comparing variants would have been interesting.
+3. **Compare Fisher variants deliberately.** We ended up implementing the true per-sample Fisher, but only after the empirical version failed. A side-by-side comparison of the two estimators — with the resulting Figure 2B curves plotted together — would have made the difference between them a concrete, measured result rather than a debugging anecdote.
 
-4. **Add a replay baseline:** we compared EWC to plain SGD, but not to experience replay (storing some data from old tasks). That would have been a fairer comparison.
+4. **Add a replay baseline.** We compared EWC to plain SGD, L2, and SGD+dropout, but not to experience replay (storing a small amount of data from old tasks). Replay is a natural and strong continual-learning baseline, and including it would have placed EWC's performance in fuller context.
 
 ---
 
 ## Personal Reflection
 
-This project changed how We think about neural networks. We used to see them as "learning machines" that accumulate knowledge. Now We see them as **optimization machines** — they find a solution for the current objective, with no inherent bias toward preserving old solutions.
+This project changed how we think about neural networks. We used to picture them as "learning machines" that accumulate knowledge over time. We now see them as **optimization machines**: they find a good solution for whatever objective is currently in front of them, with no built-in preference for preserving solutions to objectives they are no longer being shown.
 
-The most rewarding moment was watching the accuracy graphs after getting EWC working: SGD's lines collapsed like a house of cards, while EWC's lines stayed flat. That visual proof that the algorithm *works* was satisfying.
+The most instructive moment was not the final graph but the one before it — realizing that our "correct" Fisher computation was computing the wrong quantity entirely. The most *rewarding* moment came right after: watching the corrected run, where the SGD curves collapsed like a house of cards while the EWC curve stayed flat just below the single-task reference. Seeing the algorithm work, after understanding exactly why our first attempt had not, was the payoff.
 
 ---
 
 ## Conclusion
 
-Reproducing a research paper is harder than reading it. The paper presents EWC as a clean, elegant solution, but the implementation required:
-- Understanding the math (Fisher, Laplace approximation, Bayesian posteriors)
-- Debugging subtle issues (Fisher scale, evaluation bugs, permutation logic)
-- Making design choices not mentioned in the paper (λ, epochs, architecture depth)
+Reproducing a research paper is harder than reading one. The paper presents EWC as a clean, elegant idea, but turning that idea into a working replication required three distinct kinds of effort:
 
-we now have much more respect for researchers who not only invent algorithms but also make them work in practice. The gap between "theory" and "running code" is wide, and this project taught me how to bridge it.
+- **Understanding the mathematics** deeply enough to know what to compute — the Fisher as the precision of a Laplace-approximated posterior, and the crucial difference between the empirical and the true Fisher.
+- **Debugging subtle, non-erroring failures** — an evaluation that secretly used the training set, and a penalty that silently vanished because the Fisher was under-estimated.
+- **Making design decisions the paper leaves open** — λ and its coupling to the Fisher scale, the number of epochs and the network width, the depth of the Figure 2C network, and the choice to average rather than merely sum the per-task penalties.
+
+We came away with much more respect for researchers who not only invent algorithms but make them work in practice. The gap between a clean equation on the page and a curve that behaves the way the paper promises is wide — and most of our learning lived inside that gap. If there is one transferable lesson, it is that in machine learning a result is only trustworthy once you understand *why* it looks the way it does, because code that runs cleanly can still be quietly answering the wrong question.
