@@ -71,7 +71,7 @@ SEED             = 0
 | `LR` | 1e-3 | Learning rate. Lower to 5e-4 if the run diverges (avoids needing gradient clipping). |
 | `LAMBDA` | 100 | EWC penalty strength. Lambda and Fisher scale are coupled; old-notebook values do **not** transfer. Try values across ~2 orders of magnitude. |
 | `FISHER_SAMPLES` | 2048 | Number of examples used to estimate the Fisher. Higher = lower variance, slower. |
-| `NORMALIZE_PENALTY` | True | Divides the summed EWC penalty by the number of prior tasks. Keeps total penalty magnitude stable as tasks accumulate, making lambda tuning more consistent. Currently fixed to `True` in `train_ewc_sequence`. |
+| `NORMALIZE_PENALTY` | True | Intended to divide the summed EWC penalty by the number of prior tasks, keeping total penalty magnitude stable as tasks accumulate. **Note:** this flag is not currently wired into the training loop — the penalty helper is called without it and defaults to averaging, so the penalty is always normalized regardless of this value. |
 | `L2_LAMBDA` | 1.0 | Uniform quadratic penalty strength for the L2 baseline. |
 | `EARLY_STOP_PATIENCE` | 5 | Steps of non-improving validation accuracy before the dropout baseline stops training on a task. |
 
@@ -274,7 +274,7 @@ Where:
 
 **Paper-exact "separate penalties" scheme:** Each completed task contributes its *own* Fisher and its *own* anchor to the sum. This is equation 3 from Kirkpatrick et al. (2017). An alternative ("online EWC") accumulates a single running Fisher, which is a different algorithm and produces different results.
 
-**Normalization:** When `normalize=True` (the default), the penalty is divided by the number of prior tasks. This keeps the total penalty magnitude roughly constant as more tasks accumulate, which simplifies lambda tuning.
+**Normalization:** When `normalize=True` (the default), the penalty is divided by the number of prior tasks. This keeps the total penalty magnitude roughly constant as more tasks accumulate, which simplifies lambda tuning. The training loop relies on this default — it calls the helper without passing the argument — rather than reading the `NORMALIZE_PENALTY` config flag, which is not currently connected to the loop.
 
 ---
 
@@ -322,7 +322,7 @@ def train_ewc_sequence(lamda, width=WIDTH, epochs=EPOCHS_PER_TASK,
                 opt.zero_grad()
                 loss = F.cross_entropy(model(data), target)
                 if ewc_tasks:
-                    loss = loss + (lamda / 2.0) * ewc_penalty_multi(model, ewc_tasks, normalize=NORMALIZE_PENALTY)
+                    loss = loss + (lamda / 2.0) * ewc_penalty_multi(model, ewc_tasks)
                 loss.backward()
                 opt.step()   # no gradient clipping
             if record_history:
@@ -350,6 +350,8 @@ def train_ewc_sequence(lamda, width=WIDTH, epochs=EPOCHS_PER_TASK,
 4. Both the Fisher and anchor are appended to `ewc_tasks` — the penalty list grows with each new task.
 
 **No gradient clipping:** Gradient clipping was found in earlier versions to suppress the EWC consolidation force, preventing the model from learning to stay near old weights. It has been removed entirely.
+
+**A note on normalization:** The penalty helper is called as `ewc_penalty_multi(model, ewc_tasks)` without passing the `normalize` argument, so it falls back to the helper's default (`normalize=True`) and the penalty is always averaged over the number of stored tasks. The `NORMALIZE_PENALTY` config flag is **not** currently wired into this call, so changing it has no effect on the loop.
 
 **Snapshot tracking:** After each task (starting from Task 2), the average test accuracy across all tasks seen so far is recorded in `snapshots`. This is the y-axis of Figure 2B.
 
@@ -470,6 +472,8 @@ for ax, tid, label in zip(axes, [0, 1, 2], ['Task A', 'Task B', 'Task C']):
 ```
 
 **What it shows:** The accuracy curves for the first three tasks (A, B, C) across the first 60 training epochs (3 tasks × `EPOCHS_PER_TASK`). Three methods are plotted per panel: EWC (red), L2 (green), SGD (blue). Vertical dashed lines mark task boundaries. Task labels are printed above each region.
+
+**Network width:** Figure 2A is generated from the **narrow** network (width=400, 20 epochs) — both the EWC run (`ewc_run_2a`) and the baselines (`bl_2a`) are trained with `width=400` to match the paper's Fig 2A configuration. This is distinct from Figure 2B, which uses the wide network (`WIDTH=2000`).
 
 **What to expect:**
 - **SGD Task A** (blue): rises during Task A training, then collapses as Tasks B and C overwrite those weights
