@@ -97,7 +97,7 @@ We ended up going with `λ = 100`, which we found through trial and error. The v
 
 **Us:** The paper's formula seems to describe a 2-task scenario. We're running 10 tasks — how do we scale it up?
 
-**AI:** The good news is that EWC extends naturally to multiple tasks. You just accumulate a separate penalty term for each previously seen task and sum them all together. Since each term is quadratic, the sum is still a valid quadratic penalty — the paper actually mentions this. Here's what that looks like in code:
+**AI:** The good news is that EWC extends naturally to multiple tasks. You accumulate a separate penalty term for each previously seen task and combine them. Since each term is quadratic, the combination is still a valid quadratic penalty — the paper actually mentions this. In our implementation we go one step further and average the per-task penalties (divide by the number of stored tasks) so the constraint stays on a comparable scale as tasks accumulate — see Q7 for why. Here's what that looks like in code:
 
 ```python
 def ewc_penalty_multi(model, ewc_tasks, normalize=True):
@@ -122,7 +122,7 @@ As you complete each task, you save its Fisher matrix and optimal weights, then 
 
 **AI:** To reproduce this, you need two things: a way to measure Fisher overlap between tasks, and a way to create tasks with controlled similarity levels.
 
-For the **overlap metric**, compute the Fréchet distance between two normalized Fisher matrices and define overlap as `1 - d²`.
+For the **overlap metric**, compute the (squared) Hellinger distance between two globally normalized Fisher vectors and define overlap as `1 - d²`. Concretely, each Fisher matrix is flattened into a single vector, normalized to sum to 1 (so it behaves like a probability distribution), and the per-layer overlap is `1 - 0.5 · Σ(√sA − √sB)²` — a Bhattacharyya/Hellinger-type measure of how much two distributions overlap.
 
 For **controlling task similarity**, use partial permutations — instead of shuffling the entire image (like a standard permuted MNIST task), only shuffle a square region in the center. A smaller shuffled region means the tasks are more similar to each other:
 
