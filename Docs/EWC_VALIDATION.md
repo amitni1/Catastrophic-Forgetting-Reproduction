@@ -35,7 +35,7 @@ This notebook addresses both: per-sample Fisher (no batch-size under-estimate), 
 | Network width (Figs 2A/2B) | 2000 hidden units |
 | EWC λ (lambda) | 100 (tunable in config) |
 | Fisher samples (main loop) | 2048 per task |
-| L2 weight decay | 1.0 (uniform quadratic penalty) |
+| L2 penalty strength | 1.0 (uniform quadratic penalty) |
 | Early stop patience (dropout) | 5 epochs |
 | Network (Fig 2C) | 7-layer MLP (784 → 100×6 → 10) |
 | Fisher samples (Fig 2C) | 8192 per task |
@@ -132,6 +132,8 @@ def compute_fisher(model, data_loader, num_samples=1024):
                 if par.grad is not None:
                     fisher[n] += par.grad.detach() ** 2
             seen += 1
+        if seen >= num_samples:
+            break
     for n in fisher:
         fisher[n] /= max(seen, 1)
     model.zero_grad()
@@ -157,7 +159,7 @@ def ewc_penalty_multi(model, ewc_tasks, normalize=True):
     return penalty
 ```
 
-The `normalize=True` flag divides the summed penalty by the number of completed tasks, preventing the total constraint from growing unboundedly as tasks accumulate. The total loss during task `t` is:
+The `normalize=True` flag divides the summed penalty by the number of completed tasks, preventing the total constraint from growing unboundedly as tasks accumulate. The training loop calls this helper without passing the argument, so it falls back to the default (`True`) and the penalty is always averaged; the `NORMALIZE_PENALTY` config flag is not currently wired into the loop. The total loss during task `t` is:
 
 ```
 L_total = L_cross_entropy + (λ / 2) * (1/T) * Σ_{i<t} Σ_j F_j^i (θ_j - θ*_j^i)²
@@ -324,7 +326,7 @@ Each pair trains a fresh `NetDeep` for `FIG2C_EPOCHS=100` epochs on task A, then
 
 ### Overlap metric — globally normalised Hellinger distance
 
-Fisher overlap uses the **global normalisation** method from Appendix 4.3 of the paper. All six layers' Fisher values are concatenated into a single global vector, normalised to unit trace globally (not per-layer), then split back by layer to compute the per-layer Hellinger distance:
+Fisher overlap uses the **global normalisation** method from Appendix 4.3 of the paper. All six layers' Fisher values are concatenated into a single global vector, normalised to unit sum globally (not per-layer), then split back by layer to compute the per-layer Hellinger distance:
 
 ```python
 def fisher_to_global_vector(fisher_dict, layer_names):
@@ -397,7 +399,7 @@ In rough order of impact:
 
 ## 12. Known Limitations
 
-- The diagonal empirical Fisher (estimated per-sample over training data) is a simplification of the full Fisher. It is sufficient for the Permuted MNIST benchmark.
+- The diagonal true Fisher (estimated per-sample, with labels sampled from the model's own distribution) is a simplification of the full Fisher. It is sufficient for the Permuted MNIST benchmark.
 - The penalty grows as O(T) per gradient step (one Fisher + anchor stored per task). For very large T, an online EWC variant should be considered.
 - Figure 2C trains two fully independent model pairs and does not share weights or Fisher data with the Figure 2A/2B experiment. It also does not use `LAMBDA`; the overlap analysis is purely mechanistic.
 - The 10k validation split used for SGD+dropout early stopping is held out from training for all models, so it does not contaminate test accuracy measurements.
