@@ -14,7 +14,7 @@ This project is part of a submission for a course in Python by students **Amit N
 
 ## TL;DR — Result
 
-In our final configuration (λ = 100), **EWC stays above 80% average accuracy across all 10 tasks** (88.6% at task 10), matching the paper's headline result, while remaining at or above the SGD+dropout baseline at every task. Our Fisher-overlap experiment (Figure C) reproduces the paper's key finding: dissimilar tasks share little in the early layers but converge to near-identical overlap (~0.999) in the deeper, output-facing layers.
+In our final configuration (λ = 100), **EWC stays above 88% average accuracy across all 10 tasks** (88.6% at task 10), matching the paper's headline result, while remaining at or above the SGD+dropout baseline at every task. Our Fisher-overlap experiment (Figure C) reproduces the paper's key finding: dissimilar tasks share little in the early layers but converge to near-identical overlap (~0.999) in the deeper, output-facing layers.
 
 ---
 
@@ -60,7 +60,7 @@ A key implementation detail is the **true per-sample Fisher estimation**: for ea
 
 ## Why We Chose This Paper
 
-The papers was practical for a course project and ripe for improvment since its from 2017. The MNIST experiments run on a single GPU, the method needs no exotic components beyond a diagonal Fisher and a quadratic penalty, and the paper gives three concrete figures (2A–C) we could check our work against one by one. So we got to engage with a real, well-known result end to end — derive it, implement it, debug it, and compare our graphs to the originals — which is exactly the kind of learning we were hoping to get out of the project.
+The paper was a practical choice for a course project and ripe for improvement given its age. The MNIST experiments run on a single GPU, the method requires no exotic components beyond a diagonal Fisher and a quadratic penalty, and the paper provides three concrete figures (2A–C) to check our work against step by step. This let us engage with a real, well-known result end to end — deriving it, implementing it, debugging it, and comparing our graphs to the originals — which is exactly the kind of learning we wanted from the project.
 
 ---
 
