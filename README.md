@@ -14,7 +14,9 @@ This project is part of a submission for a course in Python by students **Amit N
 
 ## TL;DR — Result
 
-In our final configuration (λ = 100), **EWC stays above 88% average accuracy across all 10 tasks** (88.6% at task 10), matching the paper's headline result, while remaining at or above the SGD+dropout baseline at every task. Our Fisher-overlap experiment (Figure C) reproduces the paper's key finding: dissimilar tasks share little in the early layers but converge to near-identical overlap (~0.999) in the deeper, output-facing layers.
+In our final configuration (λ = 100), **EWC stays above 80% average accuracy across all 10 tasks** (88.6% at task 10), matching the paper's headline result, while remaining at or above the SGD+dropout baseline at every task. Our Fisher-overlap experiment (Figure C) reproduces the paper's key finding: dissimilar tasks share little in the early layers but converge to near-identical overlap (~0.999) in the deeper, output-facing layers.
+
+> **Scope:** This replication covers the **MNIST experiments only** (Figures 2A, 2B, and 2C). The Atari 2600 reinforcement-learning experiments from the paper were not reproduced.
 
 ---
 
@@ -60,7 +62,9 @@ A key implementation detail is the **true per-sample Fisher estimation**: for ea
 
 ## Why We Chose This Paper
 
-The paper was a practical choice for a course project and ripe for improvement given its age. The MNIST experiments run on a single GPU, the method requires no exotic components beyond a diagonal Fisher and a quadratic penalty, and the paper provides three concrete figures (2A–C) to check our work against step by step. This let us engage with a real, well-known result end to end — deriving it, implementing it, debugging it, and comparing our graphs to the originals — which is exactly the kind of learning we wanted from the project.
+We wanted a paper we could actually take apart and rebuild ourselves, not just run and admire. EWC fit that: it tackles a problem that's easy to *see* — a network that learns task B and visibly forgets task A — but the fix rests on a genuinely interesting idea (treating the old task's knowledge as a Bayesian prior and using the Fisher to decide which weights to protect). That gave us something to understand mathematically, not only to copy.
+
+It was also practical for a course project. The MNIST experiments run on a single GPU, the method needs no exotic components beyond a diagonal Fisher and a quadratic penalty, and the paper gives three concrete figures (2A–C) we could check our work against one by one. So we got to engage with a real, well-known result end to end — derive it, implement it, debug it, and compare our graphs to the originals — which is exactly the kind of learning we were hoping to get out of the project.
 
 ---
 
@@ -69,6 +73,8 @@ The paper was a practical choice for a course project and ripe for improvement g
 The experiment trains models sequentially across **10 Permuted MNIST tasks**:
 1. **Task 1:** the original MNIST dataset (standard digit classification).
 2. **Tasks 2–10:** Permuted MNIST — the input pixels are shuffled by a distinct fixed random permutation per task.
+
+The 60,000-image MNIST training set is split once into **50,000 training and 10,000 validation** images (held out with a fixed seed), and the standard **10,000-image test set** is used for reported accuracy. The same split is applied under every task's permutation, so each task has its own train/validation/test views of the data.
 
 Three models are compared through the sequence:
 1. **SGD:** a baseline trained with plain stochastic gradient descent, with no mechanism to protect prior tasks.
@@ -84,13 +90,13 @@ For Figure B, the SGD baseline is replaced with an **SGD + dropout** variant (0.
 ## Architecture & Parameters
 
 ### Neural Network Structure (Figures A & B)
-A Multi-Layer Perceptron (MLP) with configurable hidden width:
+A Multi-Layer Perceptron (MLP) with configurable hidden width. The same architecture is used for both figures, but at **different widths** — matching the paper, which uses a narrow network for Fig 2A and a wider one for Fig 2B:
 - **Input layer:** $28 \times 28 = 784$ units (flattened MNIST image).
-- **Hidden layer 1:** 2000 units (ReLU).
-- **Hidden layer 2:** 2000 units (ReLU).
+- **Hidden layer 1:** ReLU — width **400** for Figure 2A, **2000** for Figure 2B.
+- **Hidden layer 2:** ReLU — same width as hidden layer 1.
 - **Output layer:** 10 units (cross-entropy loss, digits 0–9).
 
-The dropout baseline uses the same architecture with an added input dropout layer (0.2) and hidden dropout layers (0.5). *(The paper's Table 1 uses a hidden width in the 400–2000 range for these figures; we use 2000.)*
+Figure 2A is trained at width 400 (the paper-exact narrow network) for 20 epochs; Figure 2B uses the wider width-2000 network. The dropout baseline uses the same architecture with an added input dropout layer (0.2) and hidden dropout layers (0.5).
 
 ### Neural Network Structure (Figure C only)
 A deeper MLP used solely for the Fisher-overlap experiment:
@@ -99,16 +105,18 @@ A deeper MLP used solely for the Fisher-overlap experiment:
 
 ### Hyperparameters
 - **Number of tasks:** 10
+- **Hidden width:** 400 for Figure 2A, 2000 for Figure 2B (Figure 2C uses the deep 6×100 network)
 - **Epochs per task:** 20 (the paper uses up to 100 for Fig B)
 - **Learning rate:** 0.001
 - **Momentum:** 0.9 (SGD)
 - **Batch size:** 256
 - **EWC lambda ($\lambda$):** 100
-- **Fisher samples:** 2048 (true per-sample estimate)
+- **Fisher samples:** 2048 (true per-sample estimate; Figure 2C uses 8192)
 - **L2 lambda:** 1.0 (uniform penalty for the L2 control)
 - **Early-stop patience:** 5 epochs (SGD+dropout baseline)
-- **Validation split:** 10,000 samples held out from training data
-- **Random seed:** 0 (single-task reference uses seed 99)
+- **Validation split:** 50,000 train / 10,000 validation (held out from the training set, seed 42) / 10,000 test
+- **Figure 2C epochs:** 100 (the deep-network Fisher-overlap run)
+- **Random seed:** 0 (single-task reference uses seed 99; data split uses seed 42)
 
 ---
 
