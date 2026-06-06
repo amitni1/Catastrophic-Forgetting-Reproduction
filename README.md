@@ -33,12 +33,12 @@ In our final configuration (λ = 100), **EWC stays above 88% average accuracy ac
 
 ## Academic documentation
 We documented every step we took to reach our results:
-- [Conclusions](Docs/TAKEAWAYS.md) — main takeaways from the project and our personal reflections.
-- [Graphs and results](graphing_and_results.md) — reproduction of the paper's figures and the project's results.
+- [AI drafting](Docs/AI-Planning.md) — how we used raw AI prompting to steer the project in the direction we wanted.
 - [AI methodology](Docs/AI_METHODOLOGY.md) — how we used AI to code and assemble the project.
 - [EWC model in code](Docs/EWC_Model.md) — a cell-by-cell explanation of how the EWC code works.
 - [Validation and testing](Docs/EWC_VALIDATION.md) — how we validated and tested the EWC implementation.
-- [AI drafting](Docs/AI-Planning.md) — how we used raw AI prompting to steer the project in the direction we wanted.
+- [Graphs and results](graphing_and_results.md) — reproduction of the paper's figures and the project's results.
+- [Conclusions](Docs/TAKEAWAYS.md) — main takeaways from the project and our personal reflections.
 
 ---
 
