@@ -161,7 +161,7 @@ Average fraction correct across all tasks learned so far, measured at the end of
 - **Single-task reference:** 0.954 (dashed line)
 - **EWC across the sequence:** 0.952 at task 2 → 0.886 at task 10 (a gentle 6.6-point decline)
 
-EWC stays above 80% across the full 10-task sequence and remains close to the single-task ceiling throughout. It is at or above the SGD+dropout baseline at every task, and the gap widens modestly as more tasks accumulate, reproducing the direction of the paper's result.
+EWC stays above 88% across the full 10-task sequence and remains close to the single-task ceiling throughout. It is at or above the SGD+dropout baseline at every task, and the gap widens modestly as more tasks accumulate, reproducing the direction of the paper's result.
 
 ### 3. Figure C — Fisher Overlap vs Network Depth
 Overlap between the diagonal Fisher matrices of two sequentially trained tasks, computed per layer across the 6-hidden-layer network, for two permutation regimes.
