@@ -154,7 +154,7 @@ Tracks test accuracy on the first three tasks epoch-by-epoch across the first 60
 ### 2. Figure B — Average Accuracy Across All Tasks Seen
 Average fraction correct across all tasks learned so far, measured at the end of each task, from task 2 through task 10. This is the like-for-like comparison the paper makes: EWC vs SGD+dropout.
 
-![Average Performance Over Tasks](images/average_accuracy_fig2b_v4.png)
+![Average Performance Over Tasks](images/image.png)
 
 - **EWC (red):** `[0.952, 0.949, 0.938, 0.941, 0.938, 0.923, 0.904, 0.907, 0.886]`
 - **SGD+dropout (blue):** `[0.949, 0.947, 0.922, 0.912, 0.904, 0.904, 0.886, 0.875, 0.868]`
