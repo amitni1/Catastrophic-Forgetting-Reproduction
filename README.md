@@ -12,7 +12,7 @@ This project is part of a submission for a course in Python by students **Amit N
 
 ---
 
-## TL;DR — Result
+## Result
 
 In our final configuration (λ = 100), **EWC stays above 80% average accuracy across all 10 tasks** (88.6% at task 10), matching the paper's headline result, while remaining at or above the SGD+dropout baseline at every task. Our Fisher-overlap experiment (Figure C) reproduces the paper's key finding: dissimilar tasks share little in the early layers but converge to near-identical overlap (~0.999) in the deeper, output-facing layers.
 
