@@ -248,7 +248,7 @@ The paper plots average test accuracy (averaged across all tasks seen so far) as
 
 ### Our Replication
 
-![Our Fig 2B replication](images/average_accuracy_fig2b_v4.png)
+![Our Fig 2B replication](images/image.png)
 
 *Our Fig 2B replication — Average Fraction Correct vs Number of Tasks (EWC vs SGD+dropout)*
  
