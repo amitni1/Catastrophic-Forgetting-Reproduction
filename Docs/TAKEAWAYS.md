@@ -97,8 +97,6 @@ This was the turning point of the project. The penalty became meaningful, and Fi
 
 3. **Compare Fisher variants deliberately.** We ended up implementing the true per-sample Fisher, but only after the empirical version failed. A side-by-side comparison of the two estimators — with the resulting Figure 2B curves plotted together — would have made the difference between them a concrete, measured result rather than a debugging anecdote.
 
-4. **Add a replay baseline.** We compared EWC to plain SGD, L2, and SGD+dropout, but not to experience replay (storing a small amount of data from old tasks). Replay is a natural and strong continual-learning baseline, and including it would have placed EWC's performance in fuller context.
-
 ---
 
 ## Personal Reflection
