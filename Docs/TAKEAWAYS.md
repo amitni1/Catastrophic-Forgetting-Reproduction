@@ -89,30 +89,6 @@ This was the turning point of the project. The penalty became meaningful, and Fi
 
 ---
 
-## Key Insights
-
-### Insight 1: EWC is an Approximate Bayesian Update
-
-The insight that made everything click is that EWC is not merely a regularization heuristic — it is an approximation to a Bayesian posterior update. After learning task A, the posterior over weights `p(θ | D_A)` is approximated by a Gaussian centred at the task-A solution `θ*_A`, with precision (inverse covariance) given by the Fisher. Learning task B then approximates `p(θ | D_A, D_B)` without ever revisiting `D_A`: the cross-entropy on B plays the role of the new likelihood, and the quadratic Fisher penalty *is* the negative log of that Gaussian prior.
-
-What surprised us was that this one reframing explained two design choices we had been treating as arbitrary. Once we saw EWC as a posterior update, the **quadratic** shape of the penalty stopped looking like a modelling convenience and started looking inevitable — a Gaussian log-density simply *is* quadratic in `θ`. And the **Fisher weighting** stopped looking like a heuristic importance score: the Fisher is the precision of that Gaussian, so the penalty naturally clamps down hard on directions the posterior is confident about and leaves the uncertain ones free. Seeing it this way also reframed how we thought about our own simplification — the diagonal Fisher is not a shortcut we should feel guilty about, but a deliberate trade, approximating a full posterior covariance by its diagonal in exchange for being able to run the method at all.
-
-### Insight 2: Shared Representations Emerge Where the Tasks Genuinely Overlap
-
-Our Figure 2C result is, in our view, the most informative part of the project. Using the globally normalized Fisher overlap, even the *dissimilar* (26×26) task pair shows overlap that **rises toward the output layers**, while the early layers — the ones processing the scrambled pixels — overlap very little. The similar (8×8) pair overlaps strongly throughout.
-
-The reason is that the output space is shared across every task: all of them ultimately classify digits 0–9. The early layers must adapt to whatever pixel arrangement a task presents, so for dissimilar tasks they specialize and diverge; the later layers operate on a more abstract, task-independent notion of class identity and can be reused. This is precisely why EWC must protect weights *selectively* rather than uniformly: a uniform penalty (like the L2 baseline) cannot tell a genuinely shared output-layer weight from an early-layer weight that one task needs and another does not, whereas the Fisher can.
-
-### Insight 3: Catastrophic Forgetting is About Interference, Not Capacity
-
-We initially suspected forgetting happened because the network "ran out of room." The Fisher analysis showed this is the wrong mental model. Our networks have far more parameters than are strictly needed for 10 permuted-MNIST tasks, yet they still forget aggressively. The problem is not capacity but **gradient interference**: when training on task B, the gradients are computed solely from task B's loss and freely overwrite the configuration that solved task A, because nothing in plain SGD's objective references task A at all. EWC addresses the interference directly — it adds curvature to the loss landscape around the weights that mattered for previous tasks, so the optimizer is steered toward a solution for B that does not destroy A, rather than relying on having spare parameters lying around.
-
-### Insight 4: λ is Coupled to the Fisher Scale, Not a Universal Constant
-
-The paper gives no formula for λ, and our experience showed *why* one cannot exist in absolute terms: λ is only meaningful relative to the magnitude of the Fisher it multiplies. The same numerical λ behaves completely differently under a batch-averaged empirical Fisher (tiny values, penalty vanishes) versus a true per-sample Fisher (sensible values, moderate λ suffices). This is the real reason our usable λ moved from the thousands down to 100 once the estimator was corrected — not because the "right" number changed, but because the Fisher's scale did. The practical takeaway is to re-tune λ from scratch, across roughly two orders of magnitude, whenever anything about the Fisher computation changes, and to treat any λ value as inseparable from the estimator that produced it.
-
----
-
 ## What We Would Do Differently
 
 1. **Start simpler.** We jumped straight to 10 tasks. We should have validated the clean 2-task case first (SGD forgets, EWC remembers) before scaling up, which would have surfaced the evaluation bug and the Fisher-scale problem far sooner.
