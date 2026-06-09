@@ -81,7 +81,7 @@ here we upped the number of tasks to 10 and with 20 epoch with a lamda of 5000 a
 |---|---|---|---|---|
 | **Fig 2A** — Continual Learning Curves | EWC maintains accuracy across tasks; SGD collapses; single-task reference line shown | Solid (EWC) vs dashed (SGD) lines for Tasks A, B, C tracked over 100 epochs | ✅ Yes | We track individual task accuracy per epoch rather than a single snapshot; SGD collapse timing and depth closely match the paper |
 | **Fig 2B** — Average Accuracy vs Tasks | EWC degrades slowly (~80% at task 10); SGD+dropout degrades gradually below it | EWC ends ~67%, SGD ends ~42% at 10 tasks; both degradation trends clearly present | ⚠️ Partial | Our EWC final accuracy is lower (~67% vs ~80%); this run uses plain SGD rather than the paper's SGD+dropout baseline. Relative ordering and trend shape are correctly reproduced |
-| **Fig 2C** — Fisher Overlap vs Depth | Low-% permutation has higher overlap in early layers; both converge at deeper layers | Low-% starts ~0.75 at layer 1, high-% starts ~0.60; both converge ~0.50 at layer 3 | ✅ Yes | Absolute overlap values are slightly higher in our replication; convergence pattern and ordering match the paper qualitatively |
+| **Fig 2C** — Fisher Overlap vs Depth | Low-% permutation has higher overlap in early layers; both converge at deeper layers | Low-% starts ~0.75 at layer 1, high-% starts ~0.60; both converge ~0.50 at layer 3 | ⚠️ Partial | Early-layer ordering and magnitudes match (low-% above high-% at layer 1, ~0.75 vs ~0.60), but the depth trend is reversed: the paper rises toward ~1.0 while our replication decays toward ~0.5. Key effect doesn't reproduce, so partial at best |
  
 ---
  
