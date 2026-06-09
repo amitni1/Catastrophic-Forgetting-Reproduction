@@ -101,9 +101,9 @@ This was the turning point of the project. The penalty became meaningful, and Fi
 
 ## Personal Reflection
 
-This project changed how we think about neural networks. We used to picture them as "learning machines" that accumulate knowledge over time. We now see them as **optimization machines**: they find a good solution for whatever objective is currently in front of them, with no built-in preference for preserving solutions to objectives they are no longer being shown.
+This project changed how we think about neural networks. We used to picture them as "learning machines" that accumulate knowledge over time. We now see them as optimization systems: they find a good solution for whatever objective is currently in front of them, with no built-in preference for preserving solutions to objectives they are no longer being shown.
 
-The most instructive moment was not the final graph but the one before it — realizing that our "correct" Fisher computation was computing the wrong quantity entirely. The most *rewarding* moment came right after: watching the corrected run, where the SGD curves collapsed like a house of cards while the EWC curve stayed flat just below the single-task reference. Seeing the algorithm work, after understanding exactly why our first attempt had not, was the payoff.
+The most instructive moment was not the final graph but the one before it — realizing that our "correct" Fisher computation was computing the wrong quantity entirely. The most rewarding moment came right after: watching the corrected run, where the SGD curves dropped to low accuracy as new tasks were added, while the EWC curve stayed above 90% across all 10 tasks. Seeing the algorithm work, after understanding exactly why our first attempt had not, was the payoff.
 
 ---
 
