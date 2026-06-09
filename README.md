@@ -190,6 +190,4 @@ $$L = \underbrace{L_B + \frac{1}{N_{\text{tasks}}}\sum_{\text{tasks}}\sum_i \fra
 | EWC only | 0.952 | 0.889 | −6.3 pts |
 | EWC + replay | 0.949 | 0.936 | −1.3 pts |
 
-With a single-task ceiling of 0.954, replay cuts the decline from 6.3 to 1.3 points and ends ~4.7 points higher at task 10 — within ~1.8 points of the ceiling.
-
-> **Honesty note.** Unlike pure EWC, this keeps a little past data (~1,800 images, < 1.5 MB by task 10), so we label it **"EWC + replay,"** not an EWC improvement. Set `USE_REPLAY = False` to recover pure EWC.
+With a single-task ceiling of 0.954, replay cuts the decline from 6.3 to 1.3 points and ends ~4.7 points higher at task 10.
