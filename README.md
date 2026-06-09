@@ -18,8 +18,6 @@ In our final configuration (λ = 100), **EWC stays above 93.6% average accuracy 
 
 > **Scope:** This replication covers the **MNIST experiments only** (Figures 2A, 2B, and 2C). The Atari 2600 reinforcement-learning experiments from the paper were not reproduced.
 > 
-**Why we left out the Atari part.** The Atari experiments use the *same* EWC algorithm as the MNIST ones — the same diagonal-Fisher importance estimate and the same quadratic penalty — so reproducing the MNIST figures already implements and tests the method itself; the Atari section only shows that this same method also scales to a harder domain, not a new mechanism. We scoped it out for two practical reasons. First, **compute**: the Atari runs train over hundreds of millions of frames per agent, across many games and random seeds (on the order of GPU-weeks), whereas the MNIST runs finish on a single GPU in minutes. Second, **machinery that isn't EWC**: the Atari setup is a full Double-DQN reinforcement-learning agent plus a separate task-recognition module that has to *infer which game is being played* — most of which is reinforcement-learning infrastructure rather than EWC. So this was a scope decision (depth over breadth for a course project), not a judgment that the Atari results are unimportant; they are a significant contribution of the paper.
-
 ---
 
 ## Table of Contents
