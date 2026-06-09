@@ -172,3 +172,24 @@ Overlap between the diagonal Fisher matrices of two sequentially trained tasks, 
 - **High permutation — 26×26 patch** (black): `[0.541, 0.901, 0.979, 0.996, 0.998, 0.998]`
 
 When the two tasks are similar (small permuted region), Fisher overlap is high across all layers — both tasks rely on the same weights, and EWC protects those shared representations. When the tasks are dissimilar (large permuted region), overlap at the input layer drops sharply — the network must learn very different early-layer features — but converges toward 1.0 in the deeper layers, since both tasks ultimately produce the same 10-class output. This validates the Fisher Information Matrix as a meaningful proxy for parameter importance and for task similarity.
+
+---
+
+## Bonus — Combining EWC with a Replay Buffer (ER + EWC)
+
+As an extension, we added a small **experience-replay buffer** on top of EWC: after each task we keep ~200 of its real (already-permuted) examples (`REPLAY_PER_TASK`), and while training later tasks we mix a small batch of them (`REPLAY_BATCH = 128`) back into the loss. It is controlled by one `USE_REPLAY` flag and only affects the red EWC curve in Figures 2A/2B; the baselines and Figure 2C are unchanged. The objective becomes the EWC loss plus a cross-entropy term on the replayed examples:
+
+$$L = \underbrace{L_B + \frac{1}{N_{\text{tasks}}}\sum_{\text{tasks}}\sum_i \frac{\lambda}{2} F_i(\theta_i-\theta^*_i)^2}_{\text{EWC penalty}} \;+\; \underbrace{\text{CE}\big(\text{replayed old examples}\big)}_{\text{replay term}}$$
+
+**Why it helps.** EWC's diagonal Fisher is a point estimate that under-estimates uncertainty (the paper's own Figure 3C result), so it lets weights drift in directions it wrongly judges safe — and it cannot catch that drift, because its own estimate is the thing that is wrong. Replaying a few real old examples catches it directly. The two address different failure modes, so together they retain more than either alone.
+
+**Result.** Replay keeps the average accuracy almost flat across the 10-task sequence instead of sliding:
+
+| | Task 2 | Task 10 | Drop over sequence |
+|---|---|---|---|
+| EWC only | 0.952 | 0.889 | −6.3 pts |
+| EWC + replay | 0.949 | 0.936 | −1.3 pts |
+
+With a single-task ceiling of 0.954, replay cuts the decline from 6.3 to 1.3 points and ends ~4.7 points higher at task 10 — within ~1.8 points of the ceiling.
+
+> **Honesty note.** Unlike pure EWC, this keeps a little past data (~1,800 images, < 1.5 MB by task 10), so we label it **"EWC + replay,"** not an EWC improvement. Set `USE_REPLAY = False` to recover pure EWC.
