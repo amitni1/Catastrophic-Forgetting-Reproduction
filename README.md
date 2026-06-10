@@ -183,6 +183,17 @@ As an extension, we added a small **experience-replay buffer** on top of EWC: af
 
 $$L = \underbrace{L_B + \frac{1}{N_{\text{tasks}}}\sum_{\text{tasks}}\sum_i \frac{\lambda}{2} F_i(\theta_i-\theta^*_i)^2}_{\text{EWC penalty}} \;+\; \underbrace{\text{CE}\big(\text{replayed old examples}\big)}_{\text{replay term}}$$
 
+**Configuration.** The replay is controlled by one `USE_REPLAY` switch plus two new parameters; everything else (the EWC penalty, the baselines, Figure 2C) is unchanged:
+
+```python
+# --- replay buffer (ER+EWC hybrid: store a few real exemplars per task) ---
+USE_REPLAY      = True
+REPLAY_PER_TASK = 200      # real exemplars kept per finished task (~1800 by task 10)
+REPLAY_BATCH    = 128      # how many we replay back into each training step
+```
+
+Set `USE_REPLAY = False` to recover the original pure-EWC behaviour.
+
 **Why it helps.** EWC's diagonal Fisher is a point estimate that under-estimates uncertainty (the paper's own Figure 3C result), so it lets weights drift in directions it wrongly judges safe — and it cannot catch that drift, because its own estimate is the thing that is wrong. Replaying a few real old examples catches it directly. The two address different failure modes, so together they retain more than either alone.
 
 **Result.** Replay keeps the average accuracy almost flat across the 10-task sequence instead of sliding:
