@@ -187,11 +187,11 @@ $$L = \underbrace{L_B + \frac{1}{N_{\text{tasks}}}\sum_{\text{tasks}}\sum_i \fra
 
 **Result.** Replay keeps the average accuracy almost flat across the 10-task sequence instead of sliding:
 
+![Average Performance Over Tasks](images/average_accuracy_bonus.png)
+
 | | Task 2 | Task 10 | Drop over sequence |
 |---|---|---|---|
 | EWC only | 0.952 | 0.889 | −6.3 pts |
 | EWC + replay | 0.949 | 0.936 | −1.3 pts |
 
 With a single-task ceiling of 0.954, replay cuts the decline from 6.3 to 1.3 points and ends ~4.7 points higher at task 10.
-
-![Average Performance Over Tasks](images/average_accuracy_bonus.png)
