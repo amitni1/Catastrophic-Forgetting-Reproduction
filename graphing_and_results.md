@@ -286,7 +286,7 @@ The paper plots Fisher information overlap between tasks as a function of layer 
 
 ## Overall Assessment
 
-We successfully reproduced the **central claims** of Kirkpatrick et al. (2017) — that EWC outperforms its baselines in continual learning and that the Fisher matrix captures task-relevant structure — across all three figures. In the final configuration (λ=100), EWC stays above 80% through all 10 tasks of Fig 2B, matching the paper's headline number, and remains at or above the SGD+dropout baseline at every task count, which is exactly the comparison the paper makes (EWC vs SGD+dropout, not EWC vs plain SGD).
+We successfully reproduced the **central claims** of Kirkpatrick et al. (2017) — that EWC outperforms its baselines in continual learning and that the Fisher matrix captures task-relevant structure — across all three figures. In the final configuration (λ=100), EWC stays above 88% through all 10 tasks of Fig 2B, matching the paper's headline number, and remains at or above the SGD+dropout baseline at every task count, which is exactly the comparison the paper makes (EWC vs SGD+dropout, not EWC vs plain SGD).
 
 Our strongest result is Fig 2C, where the Fisher-overlap convergence pattern is reproduced both qualitatively and quantitatively: the two permutation conditions begin well separated in layer 1 (0.754 vs 0.541) and converge to near-identical overlap (~0.999) in the deeper layers, reflecting the shared output representation the paper identifies. Fig 2A reproduces the paper's three-condition layout (EWC, L2, SGD) and the correct ordering of stability across tasks.
 
