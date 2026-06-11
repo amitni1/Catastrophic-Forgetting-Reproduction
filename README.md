@@ -42,7 +42,7 @@ We documented every step we took to reach our results:
 - [AI drafting](Docs/AI-Planning.md) — how we used raw AI prompting to steer the project in the direction we wanted.
 - [AI methodology](Docs/AI_METHODOLOGY.md) — how we used AI to code and assemble the project.
 - [EWC model in code](Docs/EWC_Model.md) — a cell-by-cell explanation of how the EWC code works.
-- [mathematical Improvements](Docs/EWC_Mathematical_Improvements.md) — How we calculate the normailzed penelity for EWC with dynamic $\lambda$
+- [mathematical Improvements](Docs/EWC_Mathematical_Improvements.md) — Proposed extensions to the EWC objective: Fisher normalization, dynamic λ strategies, and alternative importance estimators. Each includes derivations and implementation sketches, scoped as directions for the bonus part of the project.
 - [Validation and testing](Docs/EWC_VALIDATION.md) — how we validated and tested the EWC implementation.
 - [Graphs and results](graphing_and_results.md) — reproduction of the paper's figures and the project's results.
 - [Conclusions](Docs/TAKEAWAYS.md) — main takeaways from the project and our personal reflections.
