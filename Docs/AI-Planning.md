@@ -416,12 +416,67 @@ Even if you can't benchmark all of them, write each up with its formula, the exa
 against your code, and the expected tradeoff — that's a legitimate contribution on its own.
 
 **Us:** We did exactly that — it became a separate document, `EWC_Mathematical_Improvements.md`,
-with each idea derived against our actual `compute_fisher` / `ewc_penalty_multi` code. Then we
-got ambitious and tried to actually *run* one of them (Q15).
+with each idea derived against our actual `compute_fisher` / `ewc_penalty_multi` code. One of
+those adaptive-λ ideas was close enough to our own intuition that we worked it through
+separately (Q15), and then we got ambitious and tried to actually *run* one of them (Q16).
 
 ---
 
-### Q15: We hit a CUDA error trying to run the dynamic-λ method
+### Q15: Could λ tune *itself* during training, from task accuracy?
+
+**Us:** Here's an idea of our own we want to pressure-test before writing it up. λ is painfully
+sensitive and re-running the full sweep is expensive — that's our whole compute complaint. So
+what if λ adjusted itself *during* training instead: bump it up when an old task slips below,
+say, 0.92, and ease it down when the current task isn't reaching a high enough accuracy? Would
+that actually work, or are we missing something?
+
+**AI:** The instinct is good, and it has a principled name: what you've described is a
+**feedback controller on λ**, and the clean form of it is *constrained optimization*. Frame
+continual learning as "minimize the current task's loss **subject to** each past task's
+accuracy staying above a target τ." Then λ is the Lagrange multiplier on that constraint, and
+the natural way to update it is **dual ascent**:
+
+$$
+\lambda \;\leftarrow\; \max\!\bigl(0,\; \lambda + \eta\,(\tau - \widehat{\mathrm{acc}}_{\text{old}})\bigr)
+$$
+
+When old-task accuracy dips below τ the bracket is positive and λ climbs (protect harder); when
+old tasks sit comfortably above τ, λ relaxes. That's your "raise it when old tasks fail" rule,
+but smooth instead of a hard jump.
+
+One nice consequence: your *second* rule — lower λ when the new task struggles — you get for
+free. Because λ only rises on a violation, it settles at the smallest value that keeps the old
+tasks above τ, which is the most room the new task can possibly have. So one rule does the work
+of two, which is also a cleaner thing to write up.
+
+Three honest caveats, because they're exactly what a careful reader will ask about:
+
+- **Use validation, never test.** Steering λ from accuracy means you're tuning on that
+  accuracy — if it's the *test* set, that's leakage. You'd evaluate the EWC model on a held-out
+  per-task validation split (you already keep one; right now only the dropout baseline uses it).
+- **A hard threshold can oscillate.** Accuracy is noisy and lagging, so a strict
+  "below 0.92 → jump" rule can hunt around the threshold. The proportional dual-ascent form
+  above, optionally with an EMA on the measured accuracy or a small hysteresis band, damps that.
+- **One knob, two jobs.** A single global λ still trades *all* old tasks against the new one
+  with one lever, and if τ is set higher than the network's capacity can satisfy, λ saturates
+  and the new task starves. If you need independent control it pairs with the per-task λ idea.
+
+And to your motivation directly: yes, this mostly buys back the compute you care about — it
+replaces the *offline* λ sweep (the expensive, combinatorial part) with one online controller.
+It isn't free: τ, the step size η, and the check interval become new knobs, though τ
+("keep old tasks ≥ 92%") is far more interpretable than a raw λ.
+
+**Us:** We added this as its own section in `EWC_Mathematical_Improvements.md` (§2.5,
+accuracy-feedback / constrained-λ), with the dual-ascent update, the validation-not-test note,
+and the oscillation caveat. We kept it **proposed and derived, not benchmarked** like the rest:
+even though it removes the sweep, *showing* the controller matches a hand-tuned λ would still
+need the same multi-seed comparison runs we don't have — the same scope limit documented for
+everything else in that file. It's a sibling to the gradient-balancing λ (Q16), which we did
+briefly try to run.
+
+---
+
+### Q16: We hit a CUDA error trying to run the dynamic-λ method
 
 **Us:** So we couldn't resist implementing the gradient-balancing (dynamic) λ to see it work.
 Within a handful of steps the run died with `RuntimeError: CUDA out of memory`. Our normal
@@ -456,9 +511,9 @@ full width-2000 / 10-task / seed-averaged scale, you really do need a larger-mem
 you have. This is the same wall described in the scope note of your improvements doc.
 
 **Us:** That settled it. Rather than cripple the method just to make it fit (and then report a
-result that isn't really the method), we left dynamic-λ as **proposed and derived but not
-benchmarked** in `EWC_Mathematical_Improvements.md`, with the out-of-memory limitation written up
-honestly. The reproduction itself, which fits comfortably, stands on its own.
+result that isn't really the method), we left the gradient-balancing λ as **proposed and derived
+but not benchmarked** in `EWC_Mathematical_Improvements.md`, with the out-of-memory limitation
+written up honestly. The reproduction itself, which fits comfortably, stands on its own.
 
 ---
 
