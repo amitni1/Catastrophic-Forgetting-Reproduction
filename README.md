@@ -14,7 +14,13 @@ This project is part of a submission for a course in Python by students **Amit N
 
 ## Result
 
-In our final configuration (λ = 100), **EWC stays above 93.6% average accuracy across all 10 tasks** (96.8% at task 10), matching the paper's headline result, while remaining at or above the SGD+dropout baseline at every task. Our Fisher-overlap experiment (Figure C) reproduces the paper's key finding: dissimilar tasks share little in the early layers but converge to near-identical overlap (~0.999) in the deeper, output-facing layers.
+This project has two layers, and they tell different halves of the same story.
+
+**The faithful reproduction (paper-exact EWC).** Using the paper's own method — separate-penalties EWC at λ = 100, with no extra mechanism — we reproduce the paper's *qualitative* finding: EWC learns each new task well (per-task test accuracy stays around 95–97%, 96.8% on task 10) and remains **at or above the SGD+dropout baseline at every task**. But under our compute budget (single seed, 20 epochs/task), the *average* accuracy across all tasks seen so far still slides gently as tasks accumulate — from **95.2% after task 2 to 88.9% after task 10**, against a single-task ceiling of 95.4%. So the paper-exact method clearly beats the baselines and slows forgetting, but on its own and at this scale it does not hold the average flat.
+
+**The bonus extension (ER + EWC).** Adding a small experience-replay buffer on top of EWC (~200 real exemplars per task) is what holds the line. The average accuracy stays nearly flat across the whole 10-task sequence — **95% → 93.6%**, a drop of about one point instead of six — and ends roughly 4.7 points higher than pure EWC at task 10. The two mechanisms address different failure modes (EWC's diagonal Fisher is a point estimate that lets weights drift in directions it wrongly judges safe; replay catches that drift directly), so together they retain more than either alone. Details and the with/without comparison are in the [Bonus](#bonus--combining-ewc-with-a-replay-buffer-er--ewc) section.
+
+Our Fisher-overlap experiment (Figure C) reproduces the paper's key structural finding: dissimilar tasks share little in the early layers but converge to near-identical overlap (~0.999) in the deeper, output-facing layers.
 
 > **Scope:** This replication covers the **MNIST experiments only** (Figures 2A, 2B, and 2C). The Atari 2600 reinforcement-learning experiments from the paper were not reproduced.
 > 
@@ -124,7 +130,7 @@ A deeper MLP used solely for the Fisher-overlap experiment:
 
 ## How to Run
 
-The full project lives in a single notebook, `ewc_replication_final.ipynb`.
+The full project lives in a single notebook, `ewc_replication.final.ipynb`.
 
 1. Set up the environment (PyTorch + torchvision; a CUDA GPU is used if available, otherwise CPU):
    ```bash
@@ -132,7 +138,7 @@ The full project lives in a single notebook, `ewc_replication_final.ipynb`.
    ```
 2. Launch Jupyter and open the notebook (the kernel is named `ewc_gpu`):
    ```bash
-   jupyter notebook ewc_replication_final.ipynb
+   jupyter notebook ewc_replication.final.ipynb
    ```
 3. Run the cells top to bottom. MNIST downloads automatically on first run. The notebook trains the sequences and writes the three figures (`fig2A.png`, `fig2B.png`, `fig2C.png`).
 
@@ -158,12 +164,12 @@ Average fraction correct across all tasks learned so far, measured at the end of
 
 ![Average Performance Over Tasks](images/image.png)
 
-- **EWC (red):** `[0.952, 0.949, 0.938, 0.941, 0.938, 0.923, 0.904, 0.907, 0.886]`
+- **EWC (red):** `[0.952, 0.950, 0.938, 0.941, 0.936, 0.923, 0.901, 0.908, 0.889]`
 - **SGD+dropout (blue):** `[0.949, 0.947, 0.922, 0.912, 0.904, 0.904, 0.886, 0.875, 0.868]`
 - **Single-task reference:** 0.954 (dashed line)
-- **EWC across the sequence:** 0.952 at task 2 → 0.886 at task 10 (a gentle 6.6-point decline)
+- **EWC across the sequence:** 0.952 at task 2 → 0.889 at task 10 (a gentle 6.3-point decline)
 
-EWC stays above 88% across the full 10-task sequence and remains close to the single-task ceiling throughout. It is at or above the SGD+dropout baseline at every task, and the gap widens modestly as more tasks accumulate, reproducing the direction of the paper's result.
+EWC stays above 88% across the full 10-task sequence and remains close to the single-task ceiling throughout. It is at or above the SGD+dropout baseline at every task, reproducing the *direction* of the paper's result. Note that this is the faithful, paper-exact run: the average still declines gently across the sequence. Holding it flat is exactly what the replay extension below adds.
 
 ### 3. Figure C — Fisher Overlap vs Network Depth
 Overlap between the diagonal Fisher matrices of two sequentially trained tasks, computed per layer across the 6-hidden-layer network, for two permutation regimes.
@@ -202,7 +208,7 @@ Set `USE_REPLAY = False` to recover the original pure-EWC behaviour.
 
 | | Task 2 | Task 10 | Drop over sequence |
 |---|---|---|---|
-| EWC only | 0.952 | 0.889 | −6.3 pts |
-| EWC + replay | 0.949 | 0.936 | −1.3 pts |
+| EWC only (paper-exact) | 0.952 | 0.889 | −6.3 pts |
+| EWC + replay (bonus) | 0.949 | 0.936 | −1.3 pts |
 
 With a single-task ceiling of 0.954, replay cuts the decline from 6.3 to 1.3 points and ends ~4.7 points higher at task 10.
