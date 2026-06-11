@@ -45,7 +45,7 @@ We documented every step we took to reach our results:
 - [Validation and testing](Docs/EWC_VALIDATION.md) — how we validated and tested the EWC implementation.
 - [Graphs and results](graphing_and_results.md) — reproduction of the paper's figures and the project's results.
 - [Conclusions](Docs/TAKEAWAYS.md) — main takeaways from the project and our personal reflections.
--[athematical Improvements](Docs/EWC_Mathematical_Improvements.md) — main takeaways from the project and our personal reflections.
+- [mathematical Improvements](Docs/EWC_Mathematical_Improvements.md) — How we calculate the normailzed penelity for EWC with dynamic $\lambda$
 ---
 
 ## Background
