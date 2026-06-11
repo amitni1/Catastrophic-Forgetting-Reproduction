@@ -10,6 +10,10 @@ This project reproduces the **Permuted MNIST** continual-learning experiments (F
 
 This project is part of a submission for a course in Python by students **Amit Nigerker** and **Yuval Holoidovsky**.
 
+> ### 🔧 Reproduction note
+> **The original paper was published without any official source code.** No reference implementation was released alongside Kirkpatrick et al. (2017), so there was no canonical codebase to clone and no runnable results we could reproduce and diff against on our own hardware. We assembled the full pipeline — the diagonal Fisher Information estimator, the separate-penalties EWC objective, the Permuted MNIST pipeline, the SGD / L2 / dropout baselines, and the Fisher-overlap experiment — directly from the paper's equations and prose, **with AI coding assistance throughout** (documented in [AI methodology](Docs/AI_METHODOLOGY.md)), rather than starting from any existing EWC implementation.
+>
+> Because there was no reference codebase or set of published results to run, **our only yardstick was the paper's own figures (2A–2C).** That makes this an *independent reproduction*: where our curves line up with the paper's, the agreement comes from reconstructing the method from the source paper, not from running the authors' own artifacts. The qualitative findings we recover — EWC sitting at or above the baselines at every task, and Fisher overlap converging to ~0.999 in the deep, output-facing layers — were obtained without access to any original code.
 ---
 
 ## Result
