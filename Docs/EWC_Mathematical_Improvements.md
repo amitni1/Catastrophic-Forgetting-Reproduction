@@ -226,6 +226,59 @@ $\tfrac{1}{2}e^{-s} L_{\text{EWC}} + \tfrac{1}{2}s$ jointly with the weights. Th
 network *learn* how much to weight the penalty. More moving parts than §2.3 and easy to
 destabilize, so try §2.3 first.
 
+### 2.5 Accuracy-feedback $\lambda$ (constrained / Lagrangian view)
+
+§2.3 sets $\lambda$ from *gradient* magnitudes and §2.4 *learns* it as a weight. A more direct
+alternative is to drive $\lambda$ from the quantity we actually care about — **task accuracy** —
+and treat the whole problem as constrained optimization: minimize the current task's loss
+**subject to** each past task's accuracy staying above a target $\tau$. Then $\lambda$ is the
+Lagrange multiplier on that constraint, updated by **dual ascent**:
+
+$$
+\lambda \;\leftarrow\; \max\!\Bigl(0,\; \lambda + \eta\,\bigl(\tau - \widehat{\mathrm{acc}}_{\text{old}}\bigr)\Bigr)
+$$
+
+where $\widehat{\mathrm{acc}}_{\text{old}}$ is the mean accuracy over previously-seen tasks on a
+held-out **validation** split and $\eta$ is a step size. When old-task accuracy dips below
+$\tau$ the update is positive and $\lambda$ rises (protect harder); when old tasks sit
+comfortably above $\tau$, $\lambda$ relaxes, freeing capacity for the new task. The "lower
+$\lambda$ when the new task struggles" behaviour is automatic: because $\lambda$ only rises on a
+violation, it settles at the smallest value that keeps old tasks above $\tau$ — which is the
+most room the new task can have.
+
+**Implementation** (computed every $k$ steps on **validation**, never test):
+
+```python
+old_acc = avg_val_acc(model, [tasks[t]['val'] for t in range(task_id)])  # past tasks only
+lamda   = max(0.0, lamda + ETA * (TAU - old_acc))                        # dual ascent on lambda
+# then use `lamda` in the usual ewc_penalty_multi for the next k steps
+```
+
+**Tradeoffs.**
+
+- It replaces the *offline* $\lambda$ sweep — the expensive, combinatorial part flagged in the
+  scope note above — with one online controller. This is the main appeal given how
+  $\lambda$-sensitive and run-expensive our setup is. It does not remove tuning entirely:
+  $\tau$, $\eta$, and the check interval $k$ are new knobs, though $\tau$ ("keep old tasks
+  $\ge$ 92%") is far more interpretable than a raw $\lambda$.
+- Steering $\lambda$ from accuracy requires a per-task validation split; using the test set
+  here would be **leakage**. (Our notebook already holds out a 10k validation split — currently
+  only the dropout baseline uses it — so the data is there.)
+- Accuracy is a noisy, lagging signal, so a bang-bang rule (hard threshold) can **oscillate**;
+  the proportional dual-ascent form above, optionally with an EMA on
+  $\widehat{\mathrm{acc}}_{\text{old}}$ or a hysteresis band, damps that.
+- A single scalar $\lambda$ still trades **all** old tasks against the new one with one lever;
+  if $\tau$ is set higher than the network's capacity can satisfy, $\lambda$ saturates and the
+  new task starves. Pairs naturally with the per-task $\lambda^{(t)}$ of §2.2 if independent
+  control is needed.
+
+**Why it's still listed as not-benchmarked.** Even though it removes the sweep, *demonstrating*
+that the controller matches a properly hand-tuned $\lambda$ would itself require the multi-seed
+comparison runs (controller vs. best swept $\lambda$) described in the scope note — so it stays
+theory-complete but empirically unverified, like the rest of this document. Related framing:
+inequality constraints on past-task losses are the basis of GEM (Lopez-Paz & Ranzato, 2017);
+the dual-ascent multiplier update is the soft-penalty analogue.
+
 ---
 
 ## 3. Better importance estimates (beyond the diagonal point-estimate Fisher)
@@ -333,6 +386,7 @@ computed from activation/gradient statistics), so this is the most advanced item
 | §1.3 Per-layer normalization | Uneven depth importance | **Low** | Connects to our Fig 2C global-vs-layer finding |
 | §2.1 $\lambda$ schedule | Fixed constraint strength | **Low** | One-line counter to the $1/N$ decay |
 | §2.3 Gradient-balancing $\lambda$ | Hand-tuned $\lambda$ | **Medium** | Replaces fragile tuning with one stable knob $\alpha$ |
+| §2.5 Accuracy-feedback $\lambda$ | Offline $\lambda$ sweep cost | **Medium** | Replaces the sweep with an online target on old-task accuracy ($\tau$) |
 | §3.1 Fisher damping | Free-drifting weights | **Low** | Cheap numerical stabilizer |
 | §3.2 Online EWC | $\mathcal{O}(N)$ memory growth | **Medium** | Clean separate-vs-online comparison on Fig 2B |
 | §3.4 Synaptic Intelligence | Post-hoc Fisher cost | **Medium** | No extra Fisher pass; alternative importance |
@@ -357,3 +411,4 @@ scheme.
 - Ritter, H., Botev, A. & Barber, D. (2018). *Online structured Laplace approximations for overcoming catastrophic forgetting.* NeurIPS. (KFAC)
 - Liu, X. et al. (2018). *Rotate your networks: Better weight consolidation and less catastrophic forgetting.* ICPR.
 - Kendall, A., Gal, Y. & Cipolla, R. (2018). *Multi-task learning using uncertainty to weigh losses.* CVPR. (adaptive loss weighting)
+- Lopez-Paz, D. & Ranzato, M. (2017). *Gradient Episodic Memory for Continual Learning.* NeurIPS. (inequality constraints on past-task losses)
