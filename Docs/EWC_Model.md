@@ -3,7 +3,7 @@
 This document details how EWC was used in our project and how each section of code works.
 
 ---
-
+$\color{blue}{\text{This is blue text}}$
 ## Background: The Catastrophic Forgetting Problem
 
 When a neural network is trained sequentially on multiple tasks, it tends to **catastrophically forget** earlier tasks — the gradient updates for the new task overwrite the weights that were important for the old one. EWC, introduced by Kirkpatrick et al. (2017), addresses this by adding a regularization penalty that slows down changes to weights that were important for previous tasks. The "importance" of each weight is measured using the **Fisher Information Matrix**.
