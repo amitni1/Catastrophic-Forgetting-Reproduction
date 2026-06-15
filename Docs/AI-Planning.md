@@ -33,10 +33,10 @@ The EWC loss function, in the paper's single-prior form:
 $$\mathcal{L}(\theta) = \mathcal{L}_B(\theta) + \sum_i \frac{\lambda}{2} F_i (\theta_i - \theta^*_{A,i})^2$$
 
 (How we extend this to 10 tasks — and why we divide the penalty by the number of tasks — is
-covered in Q5 and Q7.)
+covered in Q5 and Q8.)
 
 > **Scope note:** This replication covers the MNIST experiments from the paper (Figures 2A, 2B,
-> and 2C). The Atari reinforcement-learning experiments were not replicated — see Q12 for the
+> and 2C). The Atari reinforcement-learning experiments were not replicated — see Q13 for the
 > reasoning.
 
 ---
@@ -159,7 +159,7 @@ that looks great after 2 tasks can strangle the network by task 9. Sweep across 
 orders of magnitude and keep the value that gives the flattest, highest Figure 2B curve.
 
 **Us:** We landed on **λ = 100** after a sweep. We'll come back to the "penalty grows with
-tasks" point, because it turned into its own decision (Q7).
+tasks" point, because it turned into its own decision (Q8).
 
 ---
 
@@ -174,11 +174,12 @@ keep one running Fisher, or one per task, or something else?
    quadratic term for each. Since each term is quadratic, the sum is still a valid quadratic
    penalty. This is the form the paper describes.
 2. **Online EWC** — keep a single running Fisher that you fold each new task into. Cheaper in
-   memory, but a genuinely different algorithm with different behavior.
+   memory, but a genuinely different algorithm with different behavior (we unpack what it is,
+   and why we don't adopt it here, in Q6).
 
 For a faithful reproduction, the separate-penalties form is the closer match. In our code we
 add one twist — averaging the per-task terms (dividing by the number of stored tasks) so the
-total constraint stays on a comparable scale as tasks pile up; Q7 explains why.
+total constraint stays on a comparable scale as tasks pile up; Q8 explains why.
 
 ```python
 def ewc_penalty_multi(model, ewc_tasks, normalize=True):
@@ -198,7 +199,45 @@ both in every later penalty.
 
 ---
 
-### Q6: Now EWC won't learn the new tasks — what did we break this time?
+### Q6: What exactly is "online EWC," and should we be using it instead?
+
+**Us:** You mentioned online EWC in passing as the cheaper, single-Fisher alternative. Before we
+lock in the separate-penalties version, we want to actually understand what online EWC *is* — and
+make sure we're not skipping it for a lazy reason.
+
+**AI:** Worth pinning down. **Online EWC** replaces the *sum* of per-task penalties with a single
+running one. Instead of storing a Fisher and an anchor for every completed task, you keep one
+Fisher that each new task is folded into — typically a decayed running sum,
+$\tilde{F}_K = \gamma\,\tilde{F}_{K-1} + F_K$ — and you anchor the penalty at the *most recent*
+task's weights rather than at every past task's:
+
+$$\mathcal{L}(\theta) = \mathcal{L}_K(\theta) + \frac{\lambda}{2}\sum_i \tilde{F}_i\,(\theta_i - \theta^*_{\text{last},i})^2$$
+
+The advantages are real: memory and per-step cost stay **constant in the number of tasks** instead
+of growing toward task 10, and the decay $\gamma$ softens the "penalty piles up and strangles the
+later tasks" effect you'll hit in Q7 — which is exactly the pressure that pushes us toward the
+ad-hoc `1/N` divide in the separate-penalties version (Q8).
+
+So why not just use it? Mainly **scope and faithfulness.** Online EWC isn't in the paper you're
+reproducing — it's a *later* formulation, introduced about a year afterward in Schwarz et al.
+(2018), *Progress & Compress*, as a modification of the original 2017 EWC. The paper you're
+replicating (Kirkpatrick et al., 2017) uses the **separate-penalties** form, so that's the one a
+faithful reproduction should implement and benchmark. Quietly swapping in online EWC would mean
+reproducing a *different* algorithm from a *different* paper and then comparing it against the
+original's figures — which would muddy exactly the claim you're trying to make.
+
+The clean way to handle it: implement separate penalties for the reproduction, and file online EWC
+where it actually belongs — as one of the principled *improvements* over the original (it comes
+back in Q15).
+
+**Us:** That's the line we took. We kept the separate-penalties form for the reproduction itself
+and moved online EWC into `EWC_Mathematical_Improvements.md` as a documented improvement (a single
+running Fisher with decay), citing the 2018 *Progress & Compress* paper so it's clear it post-dates
+the work we're reproducing rather than being part of it.
+
+---
+
+### Q7: Now EWC won't learn the new tasks — what did we break this time?
 
 **Us:** Good news: the Fisher fix from Q3 worked. Bad news: now the *opposite* problem. EWC
 holds onto the old tasks beautifully but barely learns the new ones, and the average accuracy
@@ -229,7 +268,7 @@ range the paper reports. Lesson learned: "more regularization" is not a free lun
 
 ---
 
-### Q7: Why do you divide the EWC penalty by the number of tasks?
+### Q8: Why do you divide the EWC penalty by the number of tasks?
 
 **Us:** A reviewer (our own teammate) asked why we divide the penalty by the number of completed
 tasks, since the paper never does this. We want to be honest about it rather than pretend it's
@@ -249,7 +288,7 @@ compute. State it plainly in the write-up and it reads as good engineering judgm
 
 ---
 
-### Q8: How do we reproduce Figure C (Fisher overlap vs. layer depth)?
+### Q9: How do we reproduce Figure C (Fisher overlap vs. layer depth)?
 
 **Us:** Figure C shows how Fisher overlap between two tasks changes with layer depth. We don't
 see how to (a) measure overlap or (b) control how similar two tasks are. Help?
@@ -284,7 +323,7 @@ similarity) and **26×26** (large shuffled region → low task similarity).
 
 ---
 
-### Q9: Our Figure C curves looked plausible but slightly off — were we normalizing wrong?
+### Q10: Our Figure C curves looked plausible but slightly off — were we normalizing wrong?
 
 **Us:** We got Figure C working, but the per-layer overlap values looked a little too tidy and
 didn't match the paper's shape in the early layers. We suspect our normalization. We'd been
@@ -303,7 +342,7 @@ difference.
 
 ---
 
-### Q10: Why use a separate model for the single-task reference line?
+### Q11: Why use a separate model for the single-task reference line?
 
 **Us:** For the dashed "ceiling" line in Figure 2B, can't we just reuse the EWC model's Task 0
 accuracy? Building a whole separate model for one dashed line feels like overkill.
@@ -320,7 +359,7 @@ of the main run.
 
 ---
 
-### Q11: Mechanically, why does plain SGD forget but EWC doesn't?
+### Q12: Mechanically, why does plain SGD forget but EWC doesn't?
 
 **Us:** We get EWC conceptually, but our lecturer will absolutely ask us to explain the
 *mechanism* out loud. Can you give us the under-the-hood version, not the hand-wavy one?
@@ -340,7 +379,7 @@ is why EWC can still learn B at all.
 
 ---
 
-### Q12: Should we also reproduce the Atari experiments?
+### Q13: Should we also reproduce the Atari experiments?
 
 **Us:** The paper has those impressive Atari reinforcement-learning results. Part of us wants to
 attempt them. Talk us out of it (or into it).
@@ -363,7 +402,7 @@ not an omission.
 
 ---
 
-### Q13: Could we add something of our own on top of the reproduction?
+### Q14: Could we add something of our own on top of the reproduction?
 
 **Us:** We'd like a small original extension for the bonus, not just a pure reproduction.
 Something that's genuinely motivated, not bolted on. Ideas?
@@ -387,7 +426,7 @@ the with/without comparison is in the README bonus section. A nice result to end
 
 ---
 
-### Q14: What are the real mathematical ways EWC itself could be improved?
+### Q15: What are the real mathematical ways EWC itself could be improved?
 
 **Us:** We've nailed the reproduction and the replay bonus, and now we're greedy — we want to
 write up the ways EWC *itself* could be improved mathematically, not just reproduced. Two things
@@ -418,11 +457,11 @@ against your code, and the expected tradeoff — that's a legitimate contributio
 **Us:** We did exactly that — it became a separate document, `EWC_Mathematical_Improvements.md`,
 with each idea derived against our actual `compute_fisher` / `ewc_penalty_multi` code. One of
 those adaptive-λ ideas was close enough to our own intuition that we worked it through
-separately (Q15), and then we got ambitious and tried to actually *run* one of them (Q16).
+separately (Q16), and then we got ambitious and tried to actually *run* one of them (Q17).
 
 ---
 
-### Q15: Could λ tune *itself* during training, from task accuracy?
+### Q16: Could λ tune *itself* during training, from task accuracy?
 
 **Us:** Here's an idea of our own we want to pressure-test before writing it up. λ is painfully
 sensitive and re-running the full sweep is expensive — that's our whole compute complaint. So
@@ -471,12 +510,12 @@ accuracy-feedback / constrained-λ), with the dual-ascent update, the validation
 and the oscillation caveat. We kept it **proposed and derived, not benchmarked** like the rest:
 even though it removes the sweep, *showing* the controller matches a hand-tuned λ would still
 need the same multi-seed comparison runs we don't have — the same scope limit documented for
-everything else in that file. It's a sibling to the gradient-balancing λ (Q16), which we did
+everything else in that file. It's a sibling to the gradient-balancing λ (Q17), which we did
 briefly try to run.
 
 ---
 
-### Q16: We hit a CUDA error trying to run the dynamic-λ method
+### Q17: We hit a CUDA error trying to run the dynamic-λ method
 
 **Us:** So we couldn't resist implementing the gradient-balancing (dynamic) λ to see it work.
 Within a handful of steps the run died with `RuntimeError: CUDA out of memory`. Our normal
@@ -520,3 +559,4 @@ written up honestly. The reproduction itself, which fits comfortably, stands on 
 ## References
 
 - Kirkpatrick, J., Pascanu, R., Rabinowitz, N., et al. (2017). [Overcoming catastrophic forgetting in neural networks](https://arxiv.org/abs/1612.00796). *PNAS, 114(13), 3521–3526.*
+- Schwarz, J., Luketina, J., Czarnecki, W. M., et al. (2018). [Progress & Compress: A scalable framework for continual learning](https://arxiv.org/abs/1805.06370). *ICML 2018.* (Introduces online EWC — see Q6.)
